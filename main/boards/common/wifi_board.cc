@@ -67,6 +67,7 @@ void WifiBoard::EnterWifiConfigMode() {
 void WifiBoard::StartNetwork() {
     // User can press BOOT button while starting to enter WiFi configuration mode
     if (wifi_config_mode_) {
+        ESP_LOGI(TAG, "Enter WiFi configuration mode");
         EnterWifiConfigMode();
         return;
     }
@@ -76,6 +77,7 @@ void WifiBoard::StartNetwork() {
     auto ssid_list = ssid_manager.GetSsidList();
     if (ssid_list.empty()) {
         wifi_config_mode_ = true;
+        ESP_LOGI(TAG, "No WiFi SSID configured, enter WiFi configuration mode");
         EnterWifiConfigMode();
         return;
     }

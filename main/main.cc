@@ -12,6 +12,8 @@
 
 extern "C" void app_main(void)
 {
+    // esp_log_level_set("phy", ESP_LOG_NONE);
+
     // Initialize the default event loop
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
