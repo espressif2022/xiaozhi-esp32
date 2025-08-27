@@ -294,49 +294,6 @@ add_custom_target(lang_header ALL
     DEPENDS ${LANG_HEADER}
 )
 
-if(CONFIG_BOARD_TYPE_ESP_HI)
-set(URL "https://github.com/espressif2022/image_player/raw/main/test_apps/test_8bit")
-set(SPIFFS_DIR "${CMAKE_BINARY_DIR}/emoji")
-file(MAKE_DIRECTORY ${SPIFFS_DIR})
-
-# List all files to download
-set(FILES_TO_DOWNLOAD "")
-list(APPEND FILES_TO_DOWNLOAD "Anger_enter.aaf" "Anger_loop.aaf" "Anger_return.aaf")
-list(APPEND FILES_TO_DOWNLOAD "happy_enter.aaf" "happy_loop.aaf" "happ_return.aaf")
-list(APPEND FILES_TO_DOWNLOAD "sad_enter.aaf" "sad_loop.aaf" "sad_return.aaf")
-list(APPEND FILES_TO_DOWNLOAD "scorn_enter.aaf" "scorn_loop.aaf" "scorn_return.aaf")
-list(APPEND FILES_TO_DOWNLOAD "left_enter.aaf" "left_loop.aaf" "left_return.aaf")
-list(APPEND FILES_TO_DOWNLOAD "right_enter.aaf" "right_loop.aaf" "right_return.aaf")
-list(APPEND FILES_TO_DOWNLOAD "asking.aaf" "blink_once.aaf" "blink_quick.aaf")
-list(APPEND FILES_TO_DOWNLOAD "connecting.aaf" "panic_enter.aaf" "panic_loop.aaf")
-list(APPEND FILES_TO_DOWNLOAD "panic_return.aaf" "wake.aaf")
-
-foreach(FILENAME IN LISTS FILES_TO_DOWNLOAD)
-    set(REMOTE_FILE "${URL}/${FILENAME}")
-    set(LOCAL_FILE "${SPIFFS_DIR}/${FILENAME}")
-    
-    # 检查本地文件是否存在
-    if(EXISTS ${LOCAL_FILE})
-        message(STATUS "File ${FILENAME} already exists, skipping download")
-    else()
-        message(STATUS "Downloading ${FILENAME}")
-        file(DOWNLOAD ${REMOTE_FILE} ${LOCAL_FILE}
-             STATUS DOWNLOAD_STATUS)
-        list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-        if(NOT STATUS_CODE EQUAL 0)
-            message(FATAL_ERROR "Failed to download ${FILENAME} from ${URL}")
-        endif()
-    endif()
-endforeach()
-
-spiffs_create_partition_assets(
-    assets_A
-    ${SPIFFS_DIR}
-    FLASH_IN_PROJECT
-    MMAP_FILE_SUPPORT_FORMAT ".aaf"
-)
-endif()
-
 if(CONFIG_BOARD_TYPE_ECHOEAR)
 
 idf_build_get_property(build_components BUILD_COMPONENTS)
@@ -354,6 +311,49 @@ spiffs_create_partition_assets(
     ${SPIFFS_DIR}
     FLASH_IN_PROJECT
     MMAP_FILE_SUPPORT_FORMAT ".aaf, ttf, bin"
+    IMPORT_INC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_TYPE}
+)
+endif()
+
+if(CONFIG_BOARD_TYPE_ESP_HI)
+
+set(SPIFFS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_TYPE}/emoji")
+
+idf_component_get_property(ESP_EMOTE_GFX_COMPONENT_DIR esp_emote_gfx COMPONENT_DIR)
+idf_component_get_property(XIAOZHI_FONTS_DIR 78__xiaozhi-fonts COMPONENT_DIR)
+idf_component_get_property(XIAOZHI_FONTS_LIB 78__xiaozhi-fonts COMPONENT_LIB)
+file(GLOB SOURCES ${XIAOZHI_FONTS_DIR}/src/*.c)
+
+message(STATUS "ESP_EMOTE_GFX_COMPONENT_DIR: ${ESP_EMOTE_GFX_COMPONENT_DIR}")
+message(STATUS "XIAOZHI_FONTS_DIR: ${XIAOZHI_FONTS_DIR}")
+message(STATUS "XIAOZHI_FONTS_LIB: ${XIAOZHI_FONTS_LIB}")
+# set_property 在跨组件设置源文件属性时可能失效，因为：
+# 1. 组件作用域隔离 - main组件无法直接影响其他组件的源文件编译
+# 2. 构建时序问题 - 其他组件可能已经配置完成
+# 3. ESP-IDF保护机制 - 防止跨组件的意外干扰
+# set_property(SOURCE ${SOURCES} APPEND PROPERTY
+#     INCLUDE_DIRECTORIES BEFORE PUBLIC "${ESP_EMOTE_GFX_COMPONENT_DIR}/include"
+# )
+
+# target_include_directories 在目标级别有效，因为：
+# 1. 目标级别设置 - 影响整个库目标
+# 2. 跨组件支持 - CMake原生支持跨组件目标操作  
+# 3. 构建系统兼容 - ESP-IDF完全支持这种方式
+target_include_directories(${XIAOZHI_FONTS_LIB} BEFORE PUBLIC
+    "${ESP_EMOTE_GFX_COMPONENT_DIR}/include"
+)
+
+# 验证设置结果
+# get_target_property(FONT_INCLUDES ${XIAOZHI_FONTS_LIB} INCLUDE_DIRECTORIES)
+# get_target_property(FONT_INTERFACE_INCLUDES ${XIAOZHI_FONTS_LIB} INTERFACE_INCLUDE_DIRECTORIES)
+# message(STATUS "字体目标包含目录: ${FONT_INCLUDES}")
+# message(STATUS "字体目标接口包含目录: ${FONT_INTERFACE_INCLUDES}")
+
+spiffs_create_partition_assets(
+    assets_A
+    ${SPIFFS_DIR}
+    FLASH_IN_PROJECT
+    MMAP_FILE_SUPPORT_FORMAT ".aaf, bin"
     IMPORT_INC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_TYPE}
 )
 endif()

@@ -36,7 +36,8 @@ static const char TAG[] = "AdcPdmAudioCodec";
     }
 
 AdcPdmAudioCodec::AdcPdmAudioCodec(int input_sample_rate, int output_sample_rate,
-    uint32_t adc_mic_channel, gpio_num_t pdm_speak_p,gpio_num_t pdm_speak_n, gpio_num_t pa_ctl) {
+                                   uint32_t adc_mic_channel, gpio_num_t pdm_speak_p, gpio_num_t pdm_speak_n, gpio_num_t pa_ctl)
+{
 
     input_reference_ = false;
     input_sample_rate_ = input_sample_rate;
@@ -94,7 +95,7 @@ AdcPdmAudioCodec::AdcPdmAudioCodec(int input_sample_rate, int output_sample_rate
     output_dev_ = esp_codec_dev_new(&codec_dev_cfg);
 
     output_volume_ = 100;
-    if(pa_ctl != GPIO_NUM_NC) {
+    if (pa_ctl != GPIO_NUM_NC) {
         pa_ctrl_pin_ = pa_ctl;
         gpio_config_t io_conf = {};
         io_conf.intr_type = GPIO_INTR_DISABLE;
@@ -106,7 +107,7 @@ AdcPdmAudioCodec::AdcPdmAudioCodec(int input_sample_rate, int output_sample_rate
     }
     gpio_set_drive_capability(pdm_speak_p, GPIO_DRIVE_CAP_0);
 
-    if(pdm_speak_n != GPIO_NUM_NC){
+    if (pdm_speak_n != GPIO_NUM_NC) {
         PIN_FUNC_SELECT(GPIO_PIN_MUX_REG[pdm_speak_n], PIN_FUNC_GPIO);
         gpio_set_direction(pdm_speak_n, GPIO_MODE_OUTPUT);
         esp_rom_gpio_connect_out_signal(pdm_speak_n, I2SO_SD_OUT_IDX, 1, 0); //反转输出 SD OUT 信号
@@ -115,19 +116,22 @@ AdcPdmAudioCodec::AdcPdmAudioCodec(int input_sample_rate, int output_sample_rate
     ESP_LOGI(TAG, "AdcPdmAudioCodec initialized");
 }
 
-AdcPdmAudioCodec::~AdcPdmAudioCodec() {
+AdcPdmAudioCodec::~AdcPdmAudioCodec()
+{
     ESP_ERROR_CHECK(esp_codec_dev_close(output_dev_));
     esp_codec_dev_delete(output_dev_);
     ESP_ERROR_CHECK(esp_codec_dev_close(input_dev_));
     esp_codec_dev_delete(input_dev_);
 }
 
-void AdcPdmAudioCodec::SetOutputVolume(int volume) {
+void AdcPdmAudioCodec::SetOutputVolume(int volume)
+{
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(output_dev_, volume));
     AudioCodec::SetOutputVolume(volume);
 }
 
-void AdcPdmAudioCodec::EnableInput(bool enable) {
+void AdcPdmAudioCodec::EnableInput(bool enable)
+{
     if (enable == input_enabled_) {
         return;
     }
@@ -147,7 +151,8 @@ void AdcPdmAudioCodec::EnableInput(bool enable) {
     AudioCodec::EnableInput(enable);
 }
 
-void AdcPdmAudioCodec::EnableOutput(bool enable) {
+void AdcPdmAudioCodec::EnableOutput(bool enable)
+{
     if (enable == output_enabled_) {
         return;
     }
@@ -162,12 +167,12 @@ void AdcPdmAudioCodec::EnableOutput(bool enable) {
         };
         ESP_ERROR_CHECK(esp_codec_dev_open(output_dev_, &fs));
         ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(output_dev_, output_volume_));
-        if(pa_ctrl_pin_ != GPIO_NUM_NC){
+        if (pa_ctrl_pin_ != GPIO_NUM_NC) {
             gpio_set_level(pa_ctrl_pin_, 1);
         }
 
     } else {
-        if(pa_ctrl_pin_ != GPIO_NUM_NC){
+        if (pa_ctrl_pin_ != GPIO_NUM_NC) {
             gpio_set_level(pa_ctrl_pin_, 0);
         }
         ESP_ERROR_CHECK(esp_codec_dev_close(output_dev_));
@@ -175,20 +180,23 @@ void AdcPdmAudioCodec::EnableOutput(bool enable) {
     AudioCodec::EnableOutput(enable);
 }
 
-int AdcPdmAudioCodec::Read(int16_t* dest, int samples) {
+int AdcPdmAudioCodec::Read(int16_t* dest, int samples)
+{
     if (input_enabled_) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_read(input_dev_, (void*)dest, samples * sizeof(int16_t)));
     }
     return samples;
 }
-int AdcPdmAudioCodec::Write(const int16_t* data, int samples) {
+int AdcPdmAudioCodec::Write(const int16_t* data, int samples)
+{
     if (output_enabled_) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_write(output_dev_, (void*)data, samples * sizeof(int16_t)));
     }
     return samples;
 }
 
-void AdcPdmAudioCodec::Start() {
+void AdcPdmAudioCodec::Start()
+{
     Settings settings("audio", false);
     output_volume_ = settings.GetInt("output_volume", output_volume_);
     if (output_volume_ <= 0) {

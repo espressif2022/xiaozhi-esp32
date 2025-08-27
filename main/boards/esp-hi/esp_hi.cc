@@ -17,8 +17,8 @@
 #include <esp_lcd_panel_ops.h>
 #include "esp_lcd_ili9341.h"
 
+#include "gfx.h"
 #include "assets/lang_config.h"
-#include "anim_player.h"
 #include "emoji_display.h"
 #include "servo_dog_ctrl.h"
 #include "led_strip.h"
@@ -82,31 +82,31 @@ private:
 
 #ifdef CONFIG_ESP_HI_WEB_CONTROL_ENABLED
     static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                                 int32_t event_id, void* event_data)
+                                   int32_t event_id, void* event_data)
     {
         if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED) {
 
             xTaskCreate(
-                [](void* arg) {
-                    EspHi* instance = static_cast<EspHi*>(arg);
-                    
-                    vTaskDelay(5000 / portTICK_PERIOD_MS);
+            [](void* arg) {
+                EspHi* instance = static_cast<EspHi*>(arg);
 
-                    if (!instance->web_server_initialized_) {
-                        ESP_LOGI(TAG, "WiFi connected, init web control server");
-                        esp_err_t err = esp_hi_web_control_server_init();
-                        if (err != ESP_OK) {
-                            ESP_LOGE(TAG, "Failed to initialize web control server: %d", err);
-                        } else {
-                            ESP_LOGI(TAG, "Web control server initialized");
-                            instance->web_server_initialized_ = true;
-                        }
+                vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+                if (!instance->web_server_initialized_) {
+                    ESP_LOGI(TAG, "WiFi connected, init web control server");
+                    esp_err_t err = esp_hi_web_control_server_init();
+                    if (err != ESP_OK) {
+                        ESP_LOGE(TAG, "Failed to initialize web control server: %d", err);
+                    } else {
+                        ESP_LOGI(TAG, "Web control server initialized");
+                        instance->web_server_initialized_ = true;
                     }
+                }
 
-                    vTaskDelete(NULL);
-                },
-                "web_server_init",
-                1024 * 10, arg, 5, nullptr);
+                vTaskDelete(NULL);
+            },
+            "web_server_init",
+            1024 * 10, arg, 5, nullptr);
         }
     }
 #endif //CONFIG_ESP_HI_WEB_CONTROL_ENABLED
@@ -155,8 +155,8 @@ private:
                 if (interval < 100) {
                     ESP_LOGI(TAG, "gesture detected");
                     gesture_state = 0;
-                    auto &app = Application::GetInstance();
-                    app.ToggleChatState();
+                    // auto &app = Application::GetInstance();
+                    // app.ToggleChatState();
                 }
                 break;
             }
@@ -192,8 +192,9 @@ private:
             HandleMoveWakePressUp(current_time, last_trigger_time, gesture_state);
         });
     }
-    
-    void InitializeLed() {
+
+    void InitializeLed()
+    {
         ESP_LOGI(TAG, "BLINK_GPIO setting %d", bsp_strip_config.strip_gpio_num);
 
         ESP_ERROR_CHECK(led_strip_new_rmt_device(&bsp_strip_config, &bsp_rmt_config, &led_strip_));
@@ -204,7 +205,8 @@ private:
         led_strip_refresh(led_strip_);
     }
 
-    esp_err_t SetLedColor(uint8_t r, uint8_t g, uint8_t b) {
+    esp_err_t SetLedColor(uint8_t r, uint8_t g, uint8_t b)
+    {
         esp_err_t ret = ESP_OK;
 
         ret |= led_strip_set_pixel(led_strip_, 0, r, g, b);
@@ -223,7 +225,7 @@ private:
 
 #ifdef CONFIG_ESP_HI_WEB_CONTROL_ENABLED
         ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED,
-                                                 &wifi_event_handler, this));
+                                                   &wifi_event_handler, this));
 #endif //CONFIG_ESP_HI_WEB_CONTROL_ENABLED
     }
 
@@ -297,74 +299,84 @@ private:
 
     void InitializeTools()
     {
-        auto& mcp_server = McpServer::GetInstance();
-        
+        auto &mcp_server = McpServer::GetInstance();
+
         // 基础动作控制
         mcp_server.AddTool("self.dog.basic_control", "机器人的基础动作。机器人可以做以下基础动作：\n"
-            "forward: 向前移动\nbackward: 向后移动\nturn_left: 向左转\nturn_right: 向右转\nstop: 立即停止当前动作", 
-            PropertyList({
-                Property("action", kPropertyTypeString),
-            }), [this](const PropertyList& properties) -> ReturnValue {
-                const std::string& action = properties["action"].value<std::string>();
-                if (action == "forward") {
-                    servo_dog_ctrl_send(DOG_STATE_FORWARD, NULL);
-                } else if (action == "backward") {
-                    servo_dog_ctrl_send(DOG_STATE_BACKWARD, NULL);
-                } else if (action == "turn_left") {
-                    servo_dog_ctrl_send(DOG_STATE_TURN_LEFT, NULL);
-                } else if (action == "turn_right") {
-                    servo_dog_ctrl_send(DOG_STATE_TURN_RIGHT, NULL);
-                } else if (action == "stop") {
-                    servo_dog_ctrl_send(DOG_STATE_IDLE, NULL);
-                } else {
-                    return false;
-                }
-                return true;
-            });
-        
+                           "forward: 向前移动\nbackward: 向后移动\nturn_left: 向左转\nturn_right: 向右转\nstop: 立即停止当前动作",
+        PropertyList({
+            Property("action", kPropertyTypeString),
+        }), [this](const PropertyList & properties) -> ReturnValue {
+            const std::string &action = properties["action"].value<std::string>();
+            if (action == "forward") {
+                servo_dog_ctrl_send(DOG_STATE_FORWARD, NULL);
+            } else if (action == "backward") {
+                servo_dog_ctrl_send(DOG_STATE_BACKWARD, NULL);
+            } else if (action == "turn_left")
+            {
+                servo_dog_ctrl_send(DOG_STATE_TURN_LEFT, NULL);
+            } else if (action == "turn_right")
+            {
+                servo_dog_ctrl_send(DOG_STATE_TURN_RIGHT, NULL);
+            } else if (action == "stop")
+            {
+                servo_dog_ctrl_send(DOG_STATE_IDLE, NULL);
+            } else
+            {
+                return false;
+            }
+            return true;
+        });
+
         // 扩展动作控制
         mcp_server.AddTool("self.dog.advanced_control", "机器人的扩展动作。机器人可以做以下扩展动作：\n"
-            "sway_back_forth: 前后摇摆\nlay_down: 趴下\nsway: 左右摇摆\nretract_legs: 收回腿部\n"
-            "shake_hand: 握手\nshake_back_legs: 伸懒腰\njump_forward: 向前跳跃", 
-            PropertyList({
-                Property("action", kPropertyTypeString),
-            }), [this](const PropertyList& properties) -> ReturnValue {
-                const std::string& action = properties["action"].value<std::string>();
-                if (action == "sway_back_forth") {
-                    servo_dog_ctrl_send(DOG_STATE_SWAY_BACK_FORTH, NULL);
-                } else if (action == "lay_down") {
-                    servo_dog_ctrl_send(DOG_STATE_LAY_DOWN, NULL);
-                } else if (action == "sway") {
-                    dog_action_args_t args = {
-                        .repeat_count = 4,
-                    };
-                    servo_dog_ctrl_send(DOG_STATE_SWAY, &args);
-                } else if (action == "retract_legs") {
-                    servo_dog_ctrl_send(DOG_STATE_RETRACT_LEGS, NULL);
-                } else if (action == "shake_hand") {
-                    servo_dog_ctrl_send(DOG_STATE_SHAKE_HAND, NULL);
-                } else if (action == "shake_back_legs") {
-                    servo_dog_ctrl_send(DOG_STATE_SHAKE_BACK_LEGS, NULL);
-                } else if (action == "jump_forward") {
-                    servo_dog_ctrl_send(DOG_STATE_JUMP_FORWARD, NULL);
-                } else {
-                    return false;
-                }
-                return true;
-            });
+                           "sway_back_forth: 前后摇摆\nlay_down: 趴下\nsway: 左右摇摆\nretract_legs: 收回腿部\n"
+                           "shake_hand: 握手\nshake_back_legs: 伸懒腰\njump_forward: 向前跳跃",
+        PropertyList({
+            Property("action", kPropertyTypeString),
+        }), [this](const PropertyList & properties) -> ReturnValue {
+            const std::string &action = properties["action"].value<std::string>();
+            if (action == "sway_back_forth") {
+                servo_dog_ctrl_send(DOG_STATE_SWAY_BACK_FORTH, NULL);
+            } else if (action == "lay_down") {
+                servo_dog_ctrl_send(DOG_STATE_LAY_DOWN, NULL);
+            } else if (action == "sway")
+            {
+                dog_action_args_t args = {
+                    .repeat_count = 4,
+                };
+                servo_dog_ctrl_send(DOG_STATE_SWAY, &args);
+            } else if (action == "retract_legs")
+            {
+                servo_dog_ctrl_send(DOG_STATE_RETRACT_LEGS, NULL);
+            } else if (action == "shake_hand")
+            {
+                servo_dog_ctrl_send(DOG_STATE_SHAKE_HAND, NULL);
+            } else if (action == "shake_back_legs")
+            {
+                servo_dog_ctrl_send(DOG_STATE_SHAKE_BACK_LEGS, NULL);
+            } else if (action == "jump_forward")
+            {
+                servo_dog_ctrl_send(DOG_STATE_JUMP_FORWARD, NULL);
+            } else
+            {
+                return false;
+            }
+            return true;
+        });
 
         // 灯光控制
-        mcp_server.AddTool("self.light.get_power", "获取灯是否打开", PropertyList(), [this](const PropertyList& properties) -> ReturnValue {
+        mcp_server.AddTool("self.light.get_power", "获取灯是否打开", PropertyList(), [this](const PropertyList & properties) -> ReturnValue {
             return led_on_;
         });
 
-        mcp_server.AddTool("self.light.turn_on", "打开灯", PropertyList(), [this](const PropertyList& properties) -> ReturnValue {
+        mcp_server.AddTool("self.light.turn_on", "打开灯", PropertyList(), [this](const PropertyList & properties) -> ReturnValue {
             SetLedColor(0xFF, 0xFF, 0xFF);
             led_on_ = true;
             return true;
         });
 
-        mcp_server.AddTool("self.light.turn_off", "关闭灯", PropertyList(), [this](const PropertyList& properties) -> ReturnValue {
+        mcp_server.AddTool("self.light.turn_off", "关闭灯", PropertyList(), [this](const PropertyList & properties) -> ReturnValue {
             SetLedColor(0x00, 0x00, 0x00);
             led_on_ = false;
             return true;
@@ -374,11 +386,11 @@ private:
             Property("r", kPropertyTypeInteger, 0, 255),
             Property("g", kPropertyTypeInteger, 0, 255),
             Property("b", kPropertyTypeInteger, 0, 255)
-        }), [this](const PropertyList& properties) -> ReturnValue {
+        }), [this](const PropertyList & properties) -> ReturnValue {
             int r = properties["r"].value<int>();
             int g = properties["g"].value<int>();
             int b = properties["b"].value<int>();
-            
+
             led_on_ = true;
             SetLedColor(r, g, b);
             return true;

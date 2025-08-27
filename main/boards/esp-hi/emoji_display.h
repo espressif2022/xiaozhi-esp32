@@ -1,33 +1,44 @@
 #pragma once
 
-#include "display/lcd_display.h"
+#include "display/lcd_display.h"// LVGL
 #include <memory>
 #include <functional>
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
-#include "anim_player.h"
 #include "mmap_generate_emoji.h"
+#include "gfx.h"
 
 namespace anim {
 
-class EmojiPlayer;
+// Helper function for setting up image descriptors
+void SetupImageDescriptor(mmap_assets_handle_t assets_handle, gfx_image_dsc_t* img_dsc, int asset_id);
+
+class EmojiEngine;
 
 using FlushIoReadyCallback = std::function<bool(esp_lcd_panel_io_handle_t, esp_lcd_panel_io_event_data_t*, void*)>;
-using FlushCallback = std::function<void(anim_player_handle_t, int, int, int, int, const void*)>;
+using FlushCallback = std::function<void(gfx_handle_t, int, int, int, int, const void*)>;
 
-class EmojiPlayer {
+class EmojiEngine {
 public:
-    EmojiPlayer(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t panel_io);
-    ~EmojiPlayer();
+    EmojiEngine(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t panel_io);
+    ~EmojiEngine();
 
-    void StartPlayer(int aaf, bool repeat, int fps);
-    void StopPlayer();
+    void setEyes(int aaf, bool repeat, int fps);
+    void stopEyes();
+    
+    void Lock();
+    void Unlock();
+    
+    void SetIcon(int asset_id);
+    mmap_assets_handle_t GetAssetsHandle() const { return assets_handle_; }
+
+    // Callback functions (public to be accessible from static helper functions)
+    static bool OnFlushIoReady(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx);
+    static void OnFlush(gfx_handle_t handle, int x_start, int y_start, int x_end, int y_end, const void *color_data);
+    static void OnUpdate(gfx_handle_t handle, gfx_player_event_t event);
 
 private:
-    static bool OnFlushIoReady(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx);
-    static void OnFlush(anim_player_handle_t handle, int x_start, int y_start, int x_end, int y_end, const void *color_data);
-
-    anim_player_handle_t player_handle_;
+    gfx_handle_t engine_handle_;
     mmap_assets_handle_t assets_handle_;
 };
 
@@ -38,17 +49,19 @@ public:
 
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetStatus(const char* status) override;
-    anim::EmojiPlayer* GetPlayer()
+    virtual void SetChatMessage(const char* role, const char* content) override;
+    
+    anim::EmojiEngine* GetEngine()
     {
-        return player_.get();
+        return engine_.get();
     }
 
 private:
-    void InitializePlayer(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t panel_io);
+    void InitializeEngine(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t panel_io);
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
 
-    std::unique_ptr<anim::EmojiPlayer> player_;
+    std::unique_ptr<anim::EmojiEngine> engine_;
 };
 
 } // namespace anim
