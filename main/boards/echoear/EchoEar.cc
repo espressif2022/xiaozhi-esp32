@@ -26,7 +26,7 @@
 
 #define TAG "EchoEar"
 
-#define USE_LVGL_DEFAULT    0
+#define USE_LVGL_DEFAULT    1
 
 LV_FONT_DECLARE(font_puhui_20_4);
 LV_FONT_DECLARE(font_awesome_20_4);

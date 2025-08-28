@@ -14,6 +14,7 @@ set(SOURCES "audio/audio_codec.cc"
             "display/display.cc"
             "display/lcd_display.cc"
             "display/oled_display.cc"
+            "display/emote_display.cc"
             "protocols/protocol.cc"
             "protocols/mqtt_protocol.cc"
             "protocols/websocket_protocol.cc"
@@ -348,6 +349,10 @@ foreach(COMPONENT ${build_components})
         break()
     endif()
 endforeach()
+
+target_include_directories(${COMPONENT_LIB} BEFORE PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_TYPE}
+)
 
 spiffs_create_partition_assets(
     assets_A

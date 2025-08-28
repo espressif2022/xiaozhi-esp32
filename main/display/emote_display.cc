@@ -367,7 +367,17 @@ void EmoteDisplay::SetChatMessage(const char* role, const char* content)
 {
     engine_->Lock();
     if (content && strlen(content) > 0) {
-        gfx_label_set_text(obj_label_tips, content);
+        // 创建临时缓冲区来处理换行符
+        std::string processed_content = content;
+        
+        // 将换行符替换为空格
+        size_t pos = 0;
+        while ((pos = processed_content.find('\n', pos)) != std::string::npos) {
+            processed_content.replace(pos, 1, " ");
+            pos += 1; // 移动到下一个位置
+        }
+        
+        gfx_label_set_text(obj_label_tips, processed_content.c_str());
         SetUIDisplayMode(UIDisplayMode::SHOW_TIPS);
     }
     engine_->Unlock();
@@ -414,6 +424,92 @@ bool EmoteDisplay::Lock(int timeout_ms)
 void EmoteDisplay::Unlock()
 {
     // Implementation if needed
+}
+
+void EmoteDisplay::SetIcon(const char* icon)
+{
+    if (!icon || !engine_) {
+        return;
+    }
+    
+    // 将图标名称映射到资源ID
+    if (std::strcmp(icon, "wifi") == 0) {
+        engine_->SetIcon(MMAP_EMOJI_NORMAL_ICON_WIFI_BIN);
+    } else if (std::strcmp(icon, "battery") == 0) {
+        engine_->SetIcon(MMAP_EMOJI_NORMAL_ICON_BATTERY_BIN);
+    } else if (std::strcmp(icon, "mic") == 0) {
+        engine_->SetIcon(MMAP_EMOJI_NORMAL_ICON_MIC_BIN);
+    } else if (std::strcmp(icon, "speaker") == 0) {
+        engine_->SetIcon(MMAP_EMOJI_NORMAL_ICON_SPEAKER_ZZZ_BIN);
+    } else if (std::strcmp(icon, "error") == 0) {
+        engine_->SetIcon(MMAP_EMOJI_NORMAL_ICON_WIFI_FAILED_BIN);
+    }
+}
+
+void EmoteDisplay::SetPreviewImage(const void* image)
+{
+    // EmoteDisplay 不支持预览图片，使用默认图标
+    if (image) {
+        ESP_LOGI(TAG, "EmoteDisplay: Preview image not supported, using default icon");
+        engine_->SetIcon(MMAP_EMOJI_NORMAL_ICON_BATTERY_BIN);
+    }
+}
+
+void EmoteDisplay::SetTheme(const std::string& theme_name)
+{
+    current_theme_name_ = theme_name;
+    ESP_LOGI(TAG, "EmoteDisplay: Theme set to %s", theme_name.c_str());
+    
+    // 根据主题设置背景色
+    if (engine_) {
+        engine_->Lock();
+        if (theme_name == "dark") {
+            gfx_emote_set_bg_color(engine_->GetAssetsHandle(), GFX_COLOR_HEX(0x000000));
+        } else if (theme_name == "light") {
+            gfx_emote_set_bg_color(engine_->GetAssetsHandle(), GFX_COLOR_HEX(0xFFFFFF));
+        }
+        engine_->Unlock();
+    }
+}
+
+void EmoteDisplay::ShowNotification(const char* notification, int duration_ms)
+{
+    if (!notification || !engine_) {
+        return;
+    }
+    
+    ESP_LOGI(TAG, "EmoteDisplay: Show notification: %s", notification);
+    
+    engine_->Lock();
+    gfx_label_set_text(obj_label_tips, notification);
+    SetUIDisplayMode(UIDisplayMode::SHOW_TIPS);
+    engine_->Unlock();
+}
+
+void EmoteDisplay::ShowNotification(const std::string& notification, int duration_ms)
+{
+    ShowNotification(notification.c_str(), duration_ms);
+}
+
+void EmoteDisplay::UpdateStatusBar(bool update_all)
+{
+    // EmoteDisplay 使用自己的状态显示方式，不需要更新状态栏
+    ESP_LOGI(TAG, "EmoteDisplay: UpdateStatusBar called (not implemented)");
+}
+
+void EmoteDisplay::SetPowerSaveMode(bool on)
+{
+    if (engine_) {
+        engine_->Lock();
+        if (on) {
+            // 进入省电模式：降低亮度或停止动画
+            gfx_anim_stop(obj_anim_eye);
+        } else {
+            // 退出省电模式：恢复动画
+            gfx_anim_start(obj_anim_eye);
+        }
+        engine_->Unlock();
+    }
 }
 
 } // namespace anim

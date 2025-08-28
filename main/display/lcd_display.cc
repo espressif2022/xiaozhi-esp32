@@ -10,8 +10,12 @@
 #include "assets/lang_config.h"
 #include <cstring>
 #include "settings.h"
+#include <esp_timer.h>
+#include <ctime>
 
 #include "board.h"
+#include "application.h"
+#include "audio_codec.h"
 
 #define TAG "LcdDisplay"
 
@@ -71,6 +75,21 @@ LcdDisplay::LcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_
     : panel_io_(panel_io), panel_(panel), fonts_(fonts) {
     width_ = width;
     height_ = height;
+
+    // 初始化通知定时器
+    esp_timer_create_args_t notification_timer_args = {
+        .callback = [](void *arg) {
+            LcdDisplay *display = static_cast<LcdDisplay*>(arg);
+            DisplayLockGuard lock(display);
+            lv_obj_add_flag(display->notification_label_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(display->status_label_, LV_OBJ_FLAG_HIDDEN);
+        },
+        .arg = this,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "notification_timer",
+        .skip_unhandled_events = false,
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&notification_timer_args, &notification_timer_));
 
     // Load theme from settings
     Settings settings("display", false);
@@ -270,6 +289,38 @@ MipiLcdDisplay::MipiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel
 }
 
 LcdDisplay::~LcdDisplay() {
+    // 清理通知定时器
+    if (notification_timer_ != nullptr) {
+        esp_timer_stop(notification_timer_);
+        esp_timer_delete(notification_timer_);
+    }
+
+    // 清理 LVGL UI 元素
+    if (network_label_ != nullptr) {
+        lv_obj_del(network_label_);
+    }
+    if (notification_label_ != nullptr) {
+        lv_obj_del(notification_label_);
+    }
+    if (status_label_ != nullptr) {
+        lv_obj_del(status_label_);
+    }
+    if (mute_label_ != nullptr) {
+        lv_obj_del(mute_label_);
+    }
+    if (battery_label_ != nullptr) {
+        lv_obj_del(battery_label_);
+    }
+    if (emotion_label_ != nullptr) {
+        lv_obj_del(emotion_label_);
+    }
+    if (low_battery_popup_ != nullptr) {
+        lv_obj_del(low_battery_popup_);
+    }
+    if (chat_message_label_ != nullptr) {
+        lv_obj_del(chat_message_label_);
+    }
+
     // 然后再清理 LVGL 对象
     if (content_ != nullptr) {
         lv_obj_del(content_);
@@ -322,6 +373,7 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_bg_color(container_, current_theme_.background, 0);
     lv_obj_set_style_border_color(container_, current_theme_.border, 0);
 
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
     /* Status bar */
     status_bar_ = lv_obj_create(container_);
     lv_obj_set_size(status_bar_, LV_HOR_RES, LV_SIZE_CONTENT);
@@ -412,13 +464,124 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+
+    // Create side bar for additional UI elements
+    side_bar_ = lv_obj_create(container_);
+    lv_obj_set_size(side_bar_, LV_HOR_RES, LV_SIZE_CONTENT);
+    lv_obj_set_style_radius(side_bar_, 0, 0);
+    lv_obj_set_style_bg_color(side_bar_, current_theme_.background, 0);
+    lv_obj_set_style_border_width(side_bar_, 0, 0);
+    lv_obj_set_style_pad_all(side_bar_, 5, 0);
+    lv_obj_set_scrollbar_mode(side_bar_, LV_SCROLLBAR_MODE_OFF);
+
+    // Create preview image object in side bar
+    preview_image_ = lv_image_create(side_bar_);
+    lv_obj_set_size(preview_image_, LV_HOR_RES * 0.8, LV_VER_RES * 0.3);
+    lv_obj_align(preview_image_, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+#else
+    /* Status bar */
+    status_bar_ = lv_obj_create(container_);
+    lv_obj_set_size(status_bar_, LV_HOR_RES, fonts_.text_font->line_height);
+    lv_obj_set_style_radius(status_bar_, 0, 0);
+    lv_obj_set_style_bg_color(status_bar_, current_theme_.background, 0);
+    lv_obj_set_style_text_color(status_bar_, current_theme_.text, 0);
+    
+    /* Content */
+    content_ = lv_obj_create(container_);
+    lv_obj_set_scrollbar_mode(content_, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_radius(content_, 0, 0);
+    lv_obj_set_width(content_, LV_HOR_RES);
+    lv_obj_set_flex_grow(content_, 1);
+    lv_obj_set_style_pad_all(content_, 5, 0);
+    lv_obj_set_style_bg_color(content_, current_theme_.chat_background, 0);
+    lv_obj_set_style_border_color(content_, current_theme_.border, 0); // Border color for content
+
+    lv_obj_set_flex_flow(content_, LV_FLEX_FLOW_COLUMN); // 垂直布局（从上到下）
+    lv_obj_set_flex_align(content_, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_EVENLY); // 子对象居中对齐，等距分布
+
+    emotion_label_ = lv_label_create(content_);
+    lv_obj_set_style_text_font(emotion_label_, &font_awesome_30_4, 0);
+    lv_obj_set_style_text_color(emotion_label_, current_theme_.text, 0);
+    lv_label_set_text(emotion_label_, FONT_AWESOME_AI_CHIP);
+
+    preview_image_ = lv_image_create(content_);
+    lv_obj_set_size(preview_image_, width_ * 0.5, height_ * 0.5);
+    lv_obj_align(preview_image_, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+
+    chat_message_label_ = lv_label_create(content_);
+    lv_label_set_text(chat_message_label_, "");
+    lv_obj_set_width(chat_message_label_, LV_HOR_RES * 0.9); // 限制宽度为屏幕宽度的 90%
+    lv_label_set_long_mode(chat_message_label_, LV_LABEL_LONG_WRAP); // 设置为自动换行模式
+    lv_obj_set_style_text_align(chat_message_label_, LV_TEXT_ALIGN_CENTER, 0); // 设置文本居中对齐
+    lv_obj_set_style_text_color(chat_message_label_, current_theme_.text, 0);
+
+    /* Status bar */
+    lv_obj_set_flex_flow(status_bar_, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(status_bar_, 0, 0);
+    lv_obj_set_style_border_width(status_bar_, 0, 0);
+    lv_obj_set_style_pad_column(status_bar_, 0, 0);
+    lv_obj_set_style_pad_left(status_bar_, 2, 0);
+    lv_obj_set_style_pad_right(status_bar_, 2, 0);
+
+    network_label_ = lv_label_create(status_bar_);
+    lv_label_set_text(network_label_, "");
+    lv_obj_set_style_text_font(network_label_, fonts_.icon_font, 0);
+    lv_obj_set_style_text_color(network_label_, current_theme_.text, 0);
+
+    notification_label_ = lv_label_create(status_bar_);
+    lv_obj_set_flex_grow(notification_label_, 1);
+    lv_obj_set_style_text_align(notification_label_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(notification_label_, current_theme_.text, 0);
+    lv_label_set_text(notification_label_, "");
+    lv_obj_add_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
+
+    status_label_ = lv_label_create(status_bar_);
+    lv_obj_set_flex_grow(status_label_, 1);
+    lv_label_set_long_mode(status_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(status_label_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(status_label_, current_theme_.text, 0);
+    lv_label_set_text(status_label_, Lang::Strings::INITIALIZING);
+    mute_label_ = lv_label_create(status_bar_);
+    lv_label_set_text(mute_label_, "");
+    lv_obj_set_style_text_font(mute_label_, fonts_.icon_font, 0);
+    lv_obj_set_style_text_color(mute_label_, current_theme_.text, 0);
+
+    battery_label_ = lv_label_create(status_bar_);
+    lv_label_set_text(battery_label_, "");
+    lv_obj_set_style_text_font(battery_label_, fonts_.icon_font, 0);
+    lv_obj_set_style_text_color(battery_label_, current_theme_.text, 0);
+
+    low_battery_popup_ = lv_obj_create(screen);
+    lv_obj_set_scrollbar_mode(low_battery_popup_, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_size(low_battery_popup_, LV_HOR_RES * 0.9, fonts_.text_font->line_height * 2);
+    lv_obj_align(low_battery_popup_, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_bg_color(low_battery_popup_, current_theme_.low_battery, 0);
+    lv_obj_set_style_radius(low_battery_popup_, 10, 0);
+    lv_obj_set_style_pad_all(low_battery_popup_, 10, 0);
+    lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+
+    low_battery_label_ = lv_label_create(low_battery_popup_);
+    lv_label_set_text(low_battery_label_, Lang::Strings::BATTERY_NEED_CHARGE);
+    lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
+    lv_obj_center(low_battery_label_);
+#endif
 }
-#if CONFIG_IDF_TARGET_ESP32P4
+#endif
+
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
 #define  MAX_MESSAGES 40
 #else
 #define  MAX_MESSAGES 20
 #endif
+
 void LcdDisplay::SetChatMessage(const char* role, const char* content) {
+    if (content == nullptr) {
+        return;
+    }
+
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
     DisplayLockGuard lock(this);
     if (content_ == nullptr) {
         return;
@@ -599,9 +762,23 @@ void LcdDisplay::SetChatMessage(const char* role, const char* content) {
     
     // Store reference to the latest message label
     chat_message_label_ = msg_text;
+#else
+    // Simple UI mode - just update the chat message label
+    DisplayLockGuard lock(this);
+    if (chat_message_label_ == nullptr) {
+        return;
+    }
+    lv_label_set_text(chat_message_label_, content);
+#endif
 }
 
-void LcdDisplay::SetPreviewImage(const lv_img_dsc_t* img_dsc) {
+void LcdDisplay::SetPreviewImage(const void* image) {
+    if (image == nullptr) {
+        return;
+    }
+
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
+    const lv_img_dsc_t* img_dsc = static_cast<const lv_img_dsc_t*>(image);
     DisplayLockGuard lock(this);
     if (content_ == nullptr) {
         return;
@@ -701,8 +878,35 @@ void LcdDisplay::SetPreviewImage(const lv_img_dsc_t* img_dsc) {
         // Auto-scroll to the image bubble
         lv_obj_scroll_to_view_recursive(img_bubble, LV_ANIM_ON);
     }
-}
 #else
+    // Simple UI mode - use the preview_image_ object
+    const lv_img_dsc_t* img_dsc = static_cast<const lv_img_dsc_t*>(image);
+    DisplayLockGuard lock(this);
+    if (preview_image_ == nullptr) {
+        return;
+    }
+    
+    if (img_dsc != nullptr) {
+        // zoom factor 0.5
+        lv_image_set_scale(preview_image_, 128 * width_ / img_dsc->header.w);
+        // 设置图片源并显示预览图片
+        lv_image_set_src(preview_image_, img_dsc);
+        lv_obj_clear_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+        // 隐藏emotion_label_
+        if (emotion_label_ != nullptr) {
+            lv_obj_add_flag(emotion_label_, LV_OBJ_FLAG_HIDDEN);
+        }
+    } else {
+        // 隐藏预览图片并显示emotion_label_
+        lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+        if (emotion_label_ != nullptr) {
+            lv_obj_clear_flag(emotion_label_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+#endif
+}
+
+#if !CONFIG_USE_WECHAT_MESSAGE_STYLE
 void LcdDisplay::SetupUI() {
     DisplayLockGuard lock(this);
 
@@ -800,37 +1004,13 @@ void LcdDisplay::SetupUI() {
     lv_obj_align(low_battery_popup_, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_bg_color(low_battery_popup_, current_theme_.low_battery, 0);
     lv_obj_set_style_radius(low_battery_popup_, 10, 0);
+    lv_obj_set_style_pad_all(low_battery_popup_, 10, 0);
+    lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+
     low_battery_label_ = lv_label_create(low_battery_popup_);
     lv_label_set_text(low_battery_label_, Lang::Strings::BATTERY_NEED_CHARGE);
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
-    lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
-}
-
-void LcdDisplay::SetPreviewImage(const lv_img_dsc_t* img_dsc) {
-    DisplayLockGuard lock(this);
-    if (preview_image_ == nullptr) {
-        return;
-    }
-    
-    if (img_dsc != nullptr) {
-        // zoom factor 0.5
-        lv_image_set_scale(preview_image_, 128 * width_ / img_dsc->header.w);
-        // 设置图片源并显示预览图片
-        lv_image_set_src(preview_image_, img_dsc);
-        lv_obj_clear_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
-        // 隐藏emotion_label_
-        if (emotion_label_ != nullptr) {
-            lv_obj_add_flag(emotion_label_, LV_OBJ_FLAG_HIDDEN);
-        }
-    } else {
-        // 隐藏预览图片并显示emotion_label_
-        lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
-        if (emotion_label_ != nullptr) {
-            lv_obj_clear_flag(emotion_label_, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
-}
 #endif
 
 void LcdDisplay::SetEmotion(const char* emotion) {
@@ -1100,4 +1280,147 @@ void LcdDisplay::SetTheme(const std::string& theme_name) {
 
     // No errors occurred. Save theme to settings
     Display::SetTheme(theme_name);
+}
+
+void LcdDisplay::SetStatus(const char* status) {
+    DisplayLockGuard lock(this);
+    if (status_label_ == nullptr) {
+        return;
+    }
+    lv_label_set_text(status_label_, status);
+    lv_obj_clear_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
+
+    last_status_update_time_ = std::chrono::system_clock::now();
+}
+
+void LcdDisplay::ShowNotification(const char* notification, int duration_ms) {
+    DisplayLockGuard lock(this);
+    if (notification_label_ == nullptr) {
+        return;
+    }
+    lv_label_set_text(notification_label_, notification);
+    lv_obj_clear_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+
+    esp_timer_stop(notification_timer_);
+    ESP_ERROR_CHECK(esp_timer_start_once(notification_timer_, duration_ms * 1000));
+}
+
+void LcdDisplay::ShowNotification(const std::string& notification, int duration_ms) {
+    ShowNotification(notification.c_str(), duration_ms);
+}
+
+void LcdDisplay::UpdateStatusBar(bool update_all) {
+    auto& app = Application::GetInstance();
+    auto& board = Board::GetInstance();
+    auto codec = board.GetAudioCodec();
+
+    // Update mute icon
+    {
+        DisplayLockGuard lock(this);
+        if (mute_label_ == nullptr) {
+            return;
+        }
+
+        // 如果静音状态改变，则更新图标
+        if (codec->output_volume() == 0 && !muted_) {
+            muted_ = true;
+            lv_label_set_text(mute_label_, FONT_AWESOME_VOLUME_MUTE);
+        } else if (codec->output_volume() > 0 && muted_) {
+            muted_ = false;
+            lv_label_set_text(mute_label_, "");
+        }
+    }
+
+    // Update time
+    if (app.GetDeviceState() == kDeviceStateIdle) {
+        if (last_status_update_time_ + std::chrono::seconds(10) < std::chrono::system_clock::now()) {
+            // Set status to clock "HH:MM"
+            time_t now = time(NULL);
+            struct tm* tm = localtime(&now);
+            // Check if the we have already set the time
+            if (tm->tm_year >= 2025 - 1900) {
+                char time_str[16];
+                strftime(time_str, sizeof(time_str), "%H:%M  ", tm);
+                SetStatus(time_str);
+            } else {
+                ESP_LOGW(TAG, "System time is not set, tm_year: %d", tm->tm_year);
+            }
+        }
+    }
+
+    esp_pm_lock_acquire(pm_lock_);
+    // 更新电池图标
+    int battery_level;
+    bool charging, discharging;
+    const char* icon = nullptr;
+    if (board.GetBatteryLevel(battery_level, charging, discharging)) {
+        if (charging) {
+            icon = FONT_AWESOME_BATTERY_CHARGING;
+        } else {
+            const char* levels[] = {
+                FONT_AWESOME_BATTERY_EMPTY, // 0-19%
+                FONT_AWESOME_BATTERY_1,    // 20-39%
+                FONT_AWESOME_BATTERY_2,    // 40-59%
+                FONT_AWESOME_BATTERY_3,    // 60-79%
+                FONT_AWESOME_BATTERY_FULL, // 80-99%
+                FONT_AWESOME_BATTERY_FULL, // 100%
+            };
+            icon = levels[battery_level / 20];
+        }
+        DisplayLockGuard lock(this);
+        if (battery_label_ != nullptr && battery_icon_ != icon) {
+            battery_icon_ = icon;
+            lv_label_set_text(battery_label_, battery_icon_);
+        }
+
+        if (low_battery_popup_ != nullptr) {
+            if (strcmp(icon, FONT_AWESOME_BATTERY_EMPTY) == 0 && discharging) {
+                if (lv_obj_has_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN)) { // 如果低电量提示框隐藏，则显示
+                    lv_obj_clear_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+                    app.PlaySound(Lang::Sounds::P3_LOW_BATTERY);
+                }
+            } else {
+                // Hide the low battery popup when the battery is not empty
+                if (!lv_obj_has_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN)) { // 如果低电量提示框显示，则隐藏
+                    lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+                }
+            }
+        }
+    }
+
+    // 每 10 秒更新一次网络图标
+    static int seconds_counter = 0;
+    if (update_all || seconds_counter++ % 10 == 0) {
+        // 升级固件时，不读取 4G 网络状态，避免占用 UART 资源
+        auto device_state = Application::GetInstance().GetDeviceState();
+        static const std::vector<DeviceState> allowed_states = {
+            kDeviceStateIdle,
+            kDeviceStateStarting,
+            kDeviceStateWifiConfiguring,
+            kDeviceStateListening,
+            kDeviceStateActivating,
+        };
+        if (std::find(allowed_states.begin(), allowed_states.end(), device_state) != allowed_states.end()) {
+            icon = board.GetNetworkStateIcon();
+            if (network_label_ != nullptr && icon != nullptr && network_icon_ != icon) {
+                DisplayLockGuard lock(this);
+                network_icon_ = icon;
+                lv_label_set_text(network_label_, network_icon_);
+            }
+        }
+    }
+
+    esp_pm_lock_release(pm_lock_);
+}
+
+void LcdDisplay::SetPowerSaveMode(bool on) {
+    if (on) {
+        SetChatMessage("system", "");
+        SetEmotion("sleepy");
+    } else {
+        SetChatMessage("system", "");
+        SetEmotion("neutral");
+    }
 }

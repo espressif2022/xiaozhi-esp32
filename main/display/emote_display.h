@@ -1,6 +1,6 @@
 #pragma once
 
-#include "display/lcd_display.h"
+#include "display.h"  // 改为直接继承 Display，而不是 LCD 框架
 #include <memory>
 #include <functional>
 #include <esp_lcd_panel_io.h>
@@ -46,10 +46,19 @@ public:
     EmoteDisplay(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t panel_io);
     virtual ~EmoteDisplay();
 
+    // 实现 Display 接口的所有方法
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetStatus(const char* status) override;
     virtual void SetChatMessage(const char* role, const char* content) override;
+    virtual void SetIcon(const char* icon) override;
+    virtual void SetPreviewImage(const void* image) override;
+    virtual void SetTheme(const std::string& theme_name) override;
+    virtual void ShowNotification(const char* notification, int duration_ms = 3000) override;
+    virtual void ShowNotification(const std::string& notification, int duration_ms = 3000) override;
+    virtual void UpdateStatusBar(bool update_all = false) override;
+    virtual void SetPowerSaveMode(bool on) override;
     
+    // 获取引擎实例
     anim::EmoteEngine* GetEngine()
     {
         return engine_.get();
@@ -61,6 +70,9 @@ private:
     virtual void Unlock() override;
 
     std::unique_ptr<anim::EmoteEngine> engine_;
+    
+    // EmoteDisplay 特有的成员变量（不包含 LVGL 元素）
+    // 这些变量在 Display 基类中已经定义，EmoteDisplay 使用自己的实现
 };
 
 } // namespace anim

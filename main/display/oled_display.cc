@@ -4,6 +4,7 @@
 
 #include <string>
 #include <algorithm>
+#include <esp_timer.h>
 
 #include <esp_log.h>
 #include <esp_err.h>
@@ -18,6 +19,21 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     : panel_io_(panel_io), panel_(panel), fonts_(fonts) {
     width_ = width;
     height_ = height;
+
+    // 初始化通知定时器
+    esp_timer_create_args_t notification_timer_args = {
+        .callback = [](void *arg) {
+            OledDisplay *display = static_cast<OledDisplay*>(arg);
+            DisplayLockGuard lock(display);
+            lv_obj_add_flag(display->notification_label_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(display->status_label_, LV_OBJ_FLAG_HIDDEN);
+        },
+        .arg = this,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "notification_timer",
+        .skip_unhandled_events = false,
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&notification_timer_args, &notification_timer_));
 
     ESP_LOGI(TAG, "Initialize LVGL");
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
@@ -65,6 +81,38 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
 }
 
 OledDisplay::~OledDisplay() {
+    // 清理通知定时器
+    if (notification_timer_ != nullptr) {
+        esp_timer_stop(notification_timer_);
+        esp_timer_delete(notification_timer_);
+    }
+
+    // 清理 LVGL UI 元素
+    if (network_label_ != nullptr) {
+        lv_obj_del(network_label_);
+    }
+    if (notification_label_ != nullptr) {
+        lv_obj_del(notification_label_);
+    }
+    if (status_label_ != nullptr) {
+        lv_obj_del(status_label_);
+    }
+    if (mute_label_ != nullptr) {
+        lv_obj_del(mute_label_);
+    }
+    if (battery_label_ != nullptr) {
+        lv_obj_del(battery_label_);
+    }
+    if (emotion_label_ != nullptr) {
+        lv_obj_del(emotion_label_);
+    }
+    if (low_battery_popup_ != nullptr) {
+        lv_obj_del(low_battery_popup_);
+    }
+    if (chat_message_label_ != nullptr) {
+        lv_obj_del(chat_message_label_);
+    }
+
     if (content_ != nullptr) {
         lv_obj_del(content_);
     }
@@ -306,5 +354,74 @@ void OledDisplay::SetupUI_128x32() {
     lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
     lv_obj_set_style_anim(chat_message_label_, &a, LV_PART_MAIN);
     lv_obj_set_style_anim_duration(chat_message_label_, lv_anim_speed_clamped(60, 300, 60000), LV_PART_MAIN);
+}
+
+// 添加缺失的函数实现
+
+void OledDisplay::SetStatus(const char* status) {
+    DisplayLockGuard lock(this);
+    if (status_label_ == nullptr) {
+        return;
+    }
+    lv_label_set_text(status_label_, status);
+    lv_obj_clear_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
+
+    last_status_update_time_ = std::chrono::system_clock::now();
+}
+
+void OledDisplay::ShowNotification(const char* notification, int duration_ms) {
+    DisplayLockGuard lock(this);
+    if (notification_label_ == nullptr) {
+        return;
+    }
+    lv_label_set_text(notification_label_, notification);
+    lv_obj_clear_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+}
+
+void OledDisplay::ShowNotification(const std::string& notification, int duration_ms) {
+    ShowNotification(notification.c_str(), duration_ms);
+}
+
+void OledDisplay::SetEmotion(const char* emotion) {
+    DisplayLockGuard lock(this);
+    if (emotion_label_ == nullptr) {
+        return;
+    }
+    lv_label_set_text(emotion_label_, emotion);
+}
+
+void OledDisplay::SetIcon(const char* icon) {
+    DisplayLockGuard lock(this);
+    if (emotion_label_ == nullptr) {
+        return;
+    }
+    lv_label_set_text(emotion_label_, icon);
+}
+
+void OledDisplay::SetPreviewImage(const void* image) {
+    // OLED 显示器不支持预览图片
+    ESP_LOGI(TAG, "OledDisplay: Preview image not supported");
+}
+
+void OledDisplay::UpdateStatusBar(bool update_all) {
+    // OLED 显示器的状态栏更新逻辑
+    ESP_LOGI(TAG, "OledDisplay: UpdateStatusBar called");
+}
+
+void OledDisplay::SetPowerSaveMode(bool on) {
+    if (on) {
+        SetChatMessage("system", "");
+        SetEmotion("sleepy");
+    } else {
+        SetChatMessage("system", "");
+        SetEmotion("neutral");
+    }
+}
+
+void OledDisplay::SetTheme(const std::string& theme_name) {
+    current_theme_name_ = theme_name;
+    ESP_LOGI(TAG, "OledDisplay: Theme set to %s", theme_name.c_str());
 }
 
