@@ -26,11 +26,9 @@ public:
     void setEyes(int aaf, bool repeat, int fps);
     void stopEyes();
     
-    void Lock();
-    void Unlock();
-    
     void SetIcon(int asset_id);
     mmap_assets_handle_t GetAssetsHandle() const { return assets_handle_; }
+    gfx_handle_t GetEngineHandle() const { return engine_handle_; }
 
     // Callback functions (public to be accessible from static helper functions)
     static bool OnFlushIoReady(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx);

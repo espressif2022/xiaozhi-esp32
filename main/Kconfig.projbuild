@@ -392,11 +392,27 @@ choice DISPLAY_ESP32S3_KORVO2_V3
         bool "ILI9341, 分辨率240*320"
 endchoice
 
-config USE_WECHAT_MESSAGE_STYLE
-    bool "Enable WeChat Message Style"
-    default n
+choice DISPLAY_STYLE
+    prompt "Display Style"
+    default DISPLAY_STYLE_DEFAULT
     help
-        使用微信聊天界面风格
+        选择显示风格
+
+    config USE_DEFAULT_STYLE
+        bool "Default Style"
+        help
+            默认显示风格
+
+    config USE_WECHAT_MESSAGE_STYLE
+        bool "Enable WeChat Message Style"
+        help
+            使用微信聊天界面风格
+
+    config USE_EMOTE_STYLE
+        bool "Emote Tips Style"
+        help
+            表情提示风格（第三个表情）
+endchoice
 
 config USE_ESP_WAKE_WORD
     bool "Enable Wake Word Detection (without AFE)"

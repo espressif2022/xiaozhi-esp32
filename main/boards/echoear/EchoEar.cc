@@ -26,7 +26,7 @@
 
 #define TAG "EchoEar"
 
-#define USE_LVGL_DEFAULT    1
+
 
 LV_FONT_DECLARE(font_puhui_20_4);
 LV_FONT_DECLARE(font_awesome_20_4);
@@ -389,7 +389,7 @@ private:
     Cst816s* cst816s_;
     Charge* charge_;
     Button boot_button_;
-#if USE_LVGL_DEFAULT
+#if CONFIG_USE_DEFAULT_STYLE || CONFIG_USE_WECHAT_MESSAGE_STYLE
     LcdDisplay* display_;
 #else
     anim::EmoteDisplay* display_ = nullptr;
@@ -560,7 +560,7 @@ private:
         esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
         esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
 
-#if USE_LVGL_DEFAULT
+#if CONFIG_USE_DEFAULT_STYLE || CONFIG_USE_WECHAT_MESSAGE_STYLE
         display_ = new SpiLcdDisplay(panel_io, panel,
         DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY, {
             .text_font = &font_puhui_20_4,

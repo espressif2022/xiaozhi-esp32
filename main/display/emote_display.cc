@@ -142,8 +142,6 @@ static void InitializeFont(gfx_handle_t engine_handle, mmap_assets_handle_t asse
         .mem_size = static_cast<size_t>(mmap_assets_get_size(assets_handle, MMAP_EMOJI_NORMAL_KAITI_TTF)),
     };
     gfx_label_new_font(engine_handle, &font_cfg, &font);
-
-    ESP_LOGI(TAG, "stack: %d", uxTaskGetStackHighWaterMark(nullptr));
 }
 
 static void InitializeLabels(gfx_handle_t engine_handle)
@@ -260,11 +258,9 @@ void EmoteEngine::setEyes(int aaf, bool repeat, int fps)
     const void* src_data = mmap_assets_get_mem(assets_handle_, aaf);
     size_t src_len = mmap_assets_get_size(assets_handle_, aaf);
 
-    Lock();
     gfx_anim_set_src(obj_anim_eye, src_data, src_len);
     gfx_anim_set_segment(obj_anim_eye, 0, 0xFFFF, fps, repeat);
     gfx_anim_start(obj_anim_eye);
-    Unlock();
 }
 
 void EmoteEngine::stopEyes()
@@ -272,19 +268,7 @@ void EmoteEngine::stopEyes()
     // Implementation if needed
 }
 
-void EmoteEngine::Lock()
-{
-    if (engine_handle_) {
-        gfx_emote_lock(engine_handle_);
-    }
-}
 
-void EmoteEngine::Unlock()
-{
-    if (engine_handle_) {
-        gfx_emote_unlock(engine_handle_);
-    }
-}
 
 void EmoteEngine::SetIcon(int asset_id)
 {
@@ -292,11 +276,9 @@ void EmoteEngine::SetIcon(int asset_id)
         return;
     }
 
-    Lock();
     SetupImageDescriptor(assets_handle_, &icon_img_dsc, asset_id);
     gfx_img_set_src(obj_img_icon, static_cast<void*>(&icon_img_dsc));
     current_icon_type = asset_id;
-    Unlock();
 }
 
 bool EmoteEngine::OnFlushIoReady(esp_lcd_panel_io_handle_t panel_io,
@@ -365,7 +347,8 @@ void EmoteDisplay::SetEmotion(const char* emotion)
 
 void EmoteDisplay::SetChatMessage(const char* role, const char* content)
 {
-    engine_->Lock();
+    DisplayLockGuard lock(this);
+
     if (content && strlen(content) > 0) {
         // 创建临时缓冲区来处理换行符
         std::string processed_content = content;
@@ -380,7 +363,6 @@ void EmoteDisplay::SetChatMessage(const char* role, const char* content)
         gfx_label_set_text(obj_label_tips, processed_content.c_str());
         SetUIDisplayMode(UIDisplayMode::SHOW_TIPS);
     }
-    engine_->Unlock();
 }
 
 void EmoteDisplay::SetStatus(const char* status)
@@ -388,6 +370,7 @@ void EmoteDisplay::SetStatus(const char* status)
     if (!engine_) {
         return;
     }
+    DisplayLockGuard lock(this);
 
     if (std::strcmp(status, "聆听中...") == 0) {
         SetUIDisplayMode(UIDisplayMode::SHOW_ANIM_TOP);
@@ -404,11 +387,9 @@ void EmoteDisplay::SetStatus(const char* status)
         engine_->SetIcon(MMAP_EMOJI_NORMAL_ICON_WIFI_FAILED_BIN);
     }
 
-    engine_->Lock();
     if (std::strcmp(status, "连接中...") != 0) {
         gfx_label_set_text(obj_label_tips, status);
     }
-    engine_->Unlock();
 }
 
 void EmoteDisplay::InitializeEngine(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t panel_io)
@@ -418,12 +399,18 @@ void EmoteDisplay::InitializeEngine(esp_lcd_panel_handle_t panel, esp_lcd_panel_
 
 bool EmoteDisplay::Lock(int timeout_ms)
 {
-    return true;
+    if (engine_ && engine_->GetEngineHandle()) {
+        gfx_emote_lock(engine_->GetEngineHandle());
+        return true;
+    }
+    return false;
 }
 
 void EmoteDisplay::Unlock()
 {
-    // Implementation if needed
+    if (engine_ && engine_->GetEngineHandle()) {
+        gfx_emote_unlock(engine_->GetEngineHandle());
+    }
 }
 
 void EmoteDisplay::SetIcon(const char* icon)
@@ -462,13 +449,12 @@ void EmoteDisplay::SetTheme(const std::string& theme_name)
     
     // 根据主题设置背景色
     if (engine_) {
-        engine_->Lock();
+        DisplayLockGuard lock(this);
         if (theme_name == "dark") {
             gfx_emote_set_bg_color(engine_->GetAssetsHandle(), GFX_COLOR_HEX(0x000000));
         } else if (theme_name == "light") {
             gfx_emote_set_bg_color(engine_->GetAssetsHandle(), GFX_COLOR_HEX(0xFFFFFF));
         }
-        engine_->Unlock();
     }
 }
 
@@ -480,10 +466,9 @@ void EmoteDisplay::ShowNotification(const char* notification, int duration_ms)
     
     ESP_LOGI(TAG, "EmoteDisplay: Show notification: %s", notification);
     
-    engine_->Lock();
+    DisplayLockGuard lock(this);
     gfx_label_set_text(obj_label_tips, notification);
     SetUIDisplayMode(UIDisplayMode::SHOW_TIPS);
-    engine_->Unlock();
 }
 
 void EmoteDisplay::ShowNotification(const std::string& notification, int duration_ms)
@@ -500,7 +485,7 @@ void EmoteDisplay::UpdateStatusBar(bool update_all)
 void EmoteDisplay::SetPowerSaveMode(bool on)
 {
     if (engine_) {
-        engine_->Lock();
+        DisplayLockGuard lock(this);
         if (on) {
             // 进入省电模式：降低亮度或停止动画
             gfx_anim_stop(obj_anim_eye);
@@ -508,7 +493,6 @@ void EmoteDisplay::SetPowerSaveMode(bool on)
             // 退出省电模式：恢复动画
             gfx_anim_start(obj_anim_eye);
         }
-        engine_->Unlock();
     }
 }
 
