@@ -19,14 +19,16 @@
 #include "esp_lcd_touch_cst816s.h"
 #include "touch.h"
 
+#if CONFIG_USE_EMOTE_STYLE
+#include "mmap_generate_emoji_normal.h"
+#endif
 #include "driver/temperature_sensor.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
 
+
 #define TAG "EchoEar"
-
-
 
 LV_FONT_DECLARE(font_puhui_20_4);
 LV_FONT_DECLARE(font_awesome_20_4);
@@ -389,10 +391,11 @@ private:
     Cst816s* cst816s_;
     Charge* charge_;
     Button boot_button_;
-#if CONFIG_USE_DEFAULT_STYLE || CONFIG_USE_WECHAT_MESSAGE_STYLE
-    LcdDisplay* display_;
-#else
+#if CONFIG_USE_EMOTE_STYLE
     anim::EmoteDisplay* display_ = nullptr;
+    mmap_assets_handle_t assets_handle_ = nullptr;
+#else
+    LcdDisplay* display_;
 #endif
     PwmBacklight* backlight_ = nullptr;
     esp_timer_handle_t touchpad_timer_;
@@ -528,6 +531,22 @@ private:
         ESP_ERROR_CHECK(spi_bus_initialize(QSPI_LCD_HOST, &bus_config, SPI_DMA_CH_AUTO));
     }
 
+    void InitializeAssets() 
+    {
+#if CONFIG_USE_EMOTE_STYLE
+        ESP_LOGI(TAG, "Initializing assets for EmoteDisplay");
+        // Initialize assets for EmoteDisplay
+        const mmap_assets_config_t assets_cfg = {
+            .partition_label = "assets",
+            .max_files = MMAP_EMOJI_NORMAL_FILES,
+            .checksum = MMAP_EMOJI_NORMAL_CHECKSUM,
+            .flags = {.mmap_enable = true, .full_check = true}
+        };
+        ESP_ERROR_CHECK(mmap_assets_new(&assets_cfg, &assets_handle_));
+        ESP_LOGI(TAG, "Assets initialized successfully");
+#endif
+    }
+
     void Initializest77916Display(uint8_t pcb_verison)
     {
 
@@ -560,15 +579,18 @@ private:
         esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
         esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
 
-#if CONFIG_USE_DEFAULT_STYLE || CONFIG_USE_WECHAT_MESSAGE_STYLE
+#if CONFIG_USE_EMOTE_STYLE
+        ESP_LOGI(TAG, "Initializing EmoteDisplay, assets_handle: %p", assets_handle_);
+        display_ = new anim::SPIEmoteDisplay(panel_io, panel, DISPLAY_WIDTH, DISPLAY_HEIGHT, {
+                    .text_font = &font_puhui_20_4,
+                }, assets_handle_);
+#else
         display_ = new SpiLcdDisplay(panel_io, panel,
         DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY, {
             .text_font = &font_puhui_20_4,
             .icon_font = &font_awesome_20_4,
             .emoji_font = font_emoji_64_init(),
         });
-#else
-        display_ = new anim::EmoteDisplay(panel, panel_io);
 #endif
         backlight_ = new PwmBacklight(DISPLAY_BACKLIGHT_PIN, DISPLAY_BACKLIGHT_OUTPUT_INVERT);
         backlight_->RestoreBrightness();
@@ -603,8 +625,19 @@ public:
         InitializeCst816sTouchPad();
 
         InitializeSpi();
+        InitializeAssets();
         Initializest77916Display(pcb_verison);
         InitializeButtons();
+    }
+
+    virtual ~EspS3Cat()
+    {
+#if CONFIG_USE_EMOTE_STYLE
+        if (assets_handle_) {
+            mmap_assets_del(assets_handle_);
+            assets_handle_ = nullptr;
+        }
+#endif
     }
 
     virtual AudioCodec* GetAudioCodec() override

@@ -331,14 +331,14 @@ foreach(FILENAME IN LISTS FILES_TO_DOWNLOAD)
 endforeach()
 
 spiffs_create_partition_assets(
-    assets_A
+    assets
     ${SPIFFS_DIR}
     FLASH_IN_PROJECT
     MMAP_FILE_SUPPORT_FORMAT ".aaf"
 )
 endif()
 
-if(CONFIG_BOARD_TYPE_ECHOEAR)
+if(CONFIG_BOARD_TYPE_ECHOEAR OR CONFIG_BOARD_TYPE_ESP_BOX_3)
 
 idf_build_get_property(build_components BUILD_COMPONENTS)
 foreach(COMPONENT ${build_components})
@@ -355,10 +355,10 @@ target_include_directories(${COMPONENT_LIB} BEFORE PUBLIC
 )
 
 spiffs_create_partition_assets(
-    assets_A
+    assets
     ${SPIFFS_DIR}
     FLASH_IN_PROJECT
-    MMAP_FILE_SUPPORT_FORMAT ".aaf, ttf, bin"
+    MMAP_FILE_SUPPORT_FORMAT ".aaf, bin"
     IMPORT_INC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_TYPE}
 )
 endif()

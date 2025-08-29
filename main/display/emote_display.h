@@ -1,47 +1,66 @@
-#pragma once
+#ifndef EMOTE_DISPLAY_H
+#define EMOTE_DISPLAY_H
 
-#include "display.h"  // 改为直接继承 Display，而不是 LCD 框架
-#include <memory>
-#include <functional>
+#include "display.h"
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
-#include "mmap_generate_emoji_normal.h"
+#include "esp_mmap_assets.h"
 #include "gfx.h"
 
 namespace anim {
 
-// Helper function for setting up image descriptors
-void SetupImageDescriptor(mmap_assets_handle_t assets_handle, gfx_image_dsc_t* img_dsc, int asset_id);
+enum class UIDisplayMode : uint8_t {
+    SHOW_ANIM_TOP = 1,  // Show obj_anim_mic
+    SHOW_TIME = 2,      // Show obj_label_time
+    SHOW_TIPS = 3       // Show obj_label_tips
+};
 
-class EmoteEngine;
-
-using FlushIoReadyCallback = std::function<bool(esp_lcd_panel_io_handle_t, esp_lcd_panel_io_event_data_t*, void*)>;
-using FlushCallback = std::function<void(gfx_handle_t, int, int, int, int, const void*)>;
-
-class EmoteEngine {
-public:
-    EmoteEngine(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t panel_io);
-    ~EmoteEngine();
-
-    void setEyes(int aaf, bool repeat, int fps);
-    void stopEyes();
+class EmoteDisplay : public Display {
+protected:
+    esp_lcd_panel_io_handle_t panel_io_ = nullptr;
+    esp_lcd_panel_handle_t panel_ = nullptr;
     
-    void SetIcon(int asset_id);
-    mmap_assets_handle_t GetAssetsHandle() const { return assets_handle_; }
-    gfx_handle_t GetEngineHandle() const { return engine_handle_; }
+    // GFX 相关元素，从 EmoteEngine 移到这里
+    gfx_handle_t engine_handle_ = nullptr;
+    mmap_assets_handle_t assets_handle_ = nullptr;
+    
+    // GFX UI 元素
+    gfx_obj_t* obj_label_tips_ = nullptr;
+    gfx_obj_t* obj_label_time_ = nullptr;
+    gfx_obj_t* obj_anim_eye_ = nullptr;
+    gfx_obj_t* obj_anim_mic_ = nullptr;
+    gfx_obj_t* obj_img_icon_ = nullptr;
+    
+    // 图标相关
+    gfx_image_dsc_t icon_img_dsc_;
+    int current_icon_type_;
+    
+    // 字体配置
+    DisplayFonts fonts_;
+    
+    // 主题相关
+    std::string current_theme_name_;
 
+    void SetupUI(int width, int height);
+    void SetUIDisplayMode(UIDisplayMode mode);
+    void SetEyes(int aaf, bool repeat, int fps);
+    void SetIcon(int asset_id);
+    void SetImageDesc(gfx_image_dsc_t* img_dsc, int asset_id);
+    static void clock_tm_callback(void* user_data);
+    virtual bool Lock(int timeout_ms = 0) override;
+    virtual void Unlock() override;
+
+public:
     // Callback functions (public to be accessible from static helper functions)
     static bool OnFlushIoReady(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx);
     static void OnFlush(gfx_handle_t handle, int x_start, int y_start, int x_end, int y_end, const void *color_data);
 
-private:
-    gfx_handle_t engine_handle_;
-    mmap_assets_handle_t assets_handle_;
-};
-
-class EmoteDisplay : public Display {
+protected:
+    // 添加protected构造函数
+    EmoteDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, int width, int height, DisplayFonts fonts, mmap_assets_handle_t assets_handle);
+    
+    
 public:
-    EmoteDisplay(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t panel_io);
     virtual ~EmoteDisplay();
 
     // 实现 Display 接口的所有方法
@@ -55,22 +74,15 @@ public:
     virtual void ShowNotification(const std::string& notification, int duration_ms = 3000) override;
     virtual void UpdateStatusBar(bool update_all = false) override;
     virtual void SetPowerSaveMode(bool on) override;
-    
-    // 获取引擎实例
-    anim::EmoteEngine* GetEngine()
-    {
-        return engine_.get();
-    }
+};
 
-private:
-    void InitializeEngine(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t panel_io);
-    virtual bool Lock(int timeout_ms = 0) override;
-    virtual void Unlock() override;
-
-    std::unique_ptr<anim::EmoteEngine> engine_;
-    
-    // EmoteDisplay 特有的成员变量（不包含 LVGL 元素）
-    // 这些变量在 Display 基类中已经定义，EmoteDisplay 使用自己的实现
+class SPIEmoteDisplay : public EmoteDisplay {
+    public:
+        SPIEmoteDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
+                      int width, int height,
+                      DisplayFonts fonts, mmap_assets_handle_t assets_handle);
 };
 
 } // namespace anim
+
+#endif // EMOTE_DISPLAY_H

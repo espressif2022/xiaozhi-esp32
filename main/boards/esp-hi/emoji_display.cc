@@ -31,7 +31,7 @@ EmojiPlayer::EmojiPlayer(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t
 {
     ESP_LOGI(TAG, "Create EmojiPlayer, panel: %p, panel_io: %p", panel, panel_io);
     const mmap_assets_config_t assets_cfg = {
-        .partition_label = "assets_A",
+        .partition_label = "assets",
         .max_files = MMAP_EMOJI_FILES,
         .checksum = MMAP_EMOJI_CHECKSUM,
         .flags = {.mmap_enable = true, .full_check = true}

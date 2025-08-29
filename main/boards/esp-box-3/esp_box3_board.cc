@@ -6,6 +6,10 @@
 #include "application.h"
 #include "button.h"
 #include "config.h"
+#include "emote_display.h"
+#if CONFIG_USE_EMOTE_STYLE
+#include "mmap_generate_emoji_normal.h"
+#endif
 
 #include <esp_log.h>
 #include <esp_lcd_panel_vendor.h>
@@ -43,7 +47,12 @@ class EspBox3Board : public WifiBoard {
 private:
     i2c_master_bus_handle_t i2c_bus_;
     Button boot_button_;
+#if CONFIG_USE_EMOTE_STYLE
+    anim::EmoteDisplay* display_ = nullptr;
+    mmap_assets_handle_t assets_handle_ = nullptr;
+#else
     LcdDisplay* display_;
+#endif
 
     void InitializeI2c() {
         // Initialize I2C peripheral
@@ -92,6 +101,21 @@ private:
 #endif
     }
 
+    void InitializeAssets() 
+    {
+#if CONFIG_USE_EMOTE_STYLE
+        // Initialize assets for EmoteDisplay
+        const mmap_assets_config_t assets_cfg = {
+            .partition_label = "assets",
+            .max_files = MMAP_EMOJI_NORMAL_FILES,
+            .checksum = MMAP_EMOJI_NORMAL_CHECKSUM,
+            .flags = {.mmap_enable = true, .full_check = true}
+        };
+        ESP_ERROR_CHECK(mmap_assets_new(&assets_cfg, &assets_handle_));
+        ESP_LOGI(TAG, "Assets initialized successfully");
+#endif
+    }
+
     void InitializeIli9341Display() {
         esp_lcd_panel_io_handle_t panel_io = nullptr;
         esp_lcd_panel_handle_t panel = nullptr;
@@ -129,6 +153,12 @@ private:
         esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
         esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
         esp_lcd_panel_disp_on_off(panel, true);
+        
+#if CONFIG_USE_EMOTE_STYLE
+        display_ = new anim::SPIEmoteDisplay(panel_io, panel, DISPLAY_WIDTH, DISPLAY_HEIGHT, {
+            .text_font = &font_puhui_20_4,
+        }, assets_handle_);
+#else
         display_ = new SpiLcdDisplay(panel_io, panel,
                                     DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
                                     {
@@ -140,15 +170,27 @@ private:
                                         .emoji_font = font_emoji_64_init(),
 #endif
                                     });
+#endif
     }
 
 public:
     EspBox3Board() : boot_button_(BOOT_BUTTON_GPIO) {
         InitializeI2c();
         InitializeSpi();
+        InitializeAssets();
         InitializeIli9341Display();
         InitializeButtons();
         GetBacklight()->RestoreBrightness();
+    }
+
+    virtual ~EspBox3Board()
+    {
+#if CONFIG_USE_EMOTE_STYLE
+        if (assets_handle_) {
+            mmap_assets_del(assets_handle_);
+            assets_handle_ = nullptr;
+        }
+#endif
     }
 
     virtual AudioCodec* GetAudioCodec() override {
