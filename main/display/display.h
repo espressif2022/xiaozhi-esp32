@@ -15,6 +15,7 @@ struct DisplayFonts {
     const lv_font_t* text_font = nullptr;
     const lv_font_t* icon_font = nullptr;
     const lv_font_t* emoji_font = nullptr;
+    const lv_font_t* basic_font = nullptr;
 };
 
 class Display {
@@ -26,6 +27,7 @@ public:
     virtual void ShowNotification(const char* notification, int duration_ms = 3000);
     virtual void ShowNotification(const std::string &notification, int duration_ms = 3000);
     virtual void SetEmotion(const char* emotion);
+    virtual void SetEmotionByID(int aaf_id);  // 添加ID设置方法
     virtual void SetChatMessage(const char* role, const char* content);
     virtual void SetIcon(const char* icon);
     virtual void SetPreviewImage(const void* image);  // 使用 void* 避免类型冲突

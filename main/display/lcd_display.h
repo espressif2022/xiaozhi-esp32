@@ -74,6 +74,7 @@ public:
     virtual void ShowNotification(const char* notification, int duration_ms = 3000) override;
     virtual void ShowNotification(const std::string& notification, int duration_ms = 3000) override;
     virtual void SetEmotion(const char* emotion) override;
+    virtual void SetEmotionByID(int aaf_id) override;
     virtual void SetIcon(const char* icon) override;
     virtual void SetPreviewImage(const void* image) override;
     virtual void SetChatMessage(const char* role, const char* content) override;

@@ -31,6 +31,11 @@ void EspLogDisplay::SetEmotion(const char* emotion)
     ESP_LOGW(TAG, "SetEmotion: %s", emotion);
 }
 
+void EspLogDisplay::SetEmotionByID(int aaf_id)
+{
+    ESP_LOGW(TAG, "SetEmotionByID: %d", aaf_id);
+}
+
 void EspLogDisplay::SetIcon(const char* icon)
 {
     ESP_LOGW(TAG, "SetIcon: %s", icon);

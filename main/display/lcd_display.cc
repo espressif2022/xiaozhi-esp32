@@ -982,6 +982,11 @@ void LcdDisplay::SetEmotion(const char* emotion) {
 #endif
 }
 
+void LcdDisplay::SetEmotionByID(int aaf_id) {
+    // LCD显示器的简单实现：显示ID
+    ESP_LOGI(TAG, "SetEmotionByID: %d", aaf_id);
+}
+
 void LcdDisplay::SetIcon(const char* icon) {
     DisplayLockGuard lock(this);
     if (emotion_label_ == nullptr) {

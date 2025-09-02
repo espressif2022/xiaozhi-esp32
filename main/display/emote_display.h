@@ -6,13 +6,72 @@
 #include <esp_lcd_panel_ops.h>
 #include "esp_mmap_assets.h"
 #include "gfx.h"
+#include <unordered_map>
+#include <tuple>
+#include <string>
 
 namespace anim {
 
 enum class UIDisplayMode : uint8_t {
-    SHOW_ANIM_TOP = 1,  // Show obj_anim_mic
-    SHOW_TIME = 2,      // Show obj_label_time
-    SHOW_TIPS = 3       // Show obj_label_tips
+    SHOW_ANIM_LISTENING = 1,  // Show obj_anim_mic
+    SHOW_CLOCK = 2,      // Show obj_label_time
+    SHOW_TOAST = 3       // Show obj_label_tips
+};
+
+// 表情映射参数结构：(资源ID, 是否重复, 帧率)
+using EmotionParam = std::tuple<int, bool, int>;
+using EmotionMap = std::unordered_map<std::string, EmotionParam>;
+
+// 图标映射参数结构
+using IconMap = std::unordered_map<std::string, int>;
+
+// UI元素布局配置结构
+struct UILayoutConfig {
+    // 眼部动画位置 (align, x_offset, y_offset)
+    struct {
+        int align = GFX_ALIGN_LEFT_MID;
+        int x = 10;
+        int y = 10;
+    } eye_anim;
+    
+    // 状态图标位置
+    struct {
+        int align = GFX_ALIGN_TOP_MID;
+        int x = -100;
+        int y = 38;
+    } status_icon;
+    
+    // 提示文本位置
+    struct {
+        int align = GFX_ALIGN_TOP_MID;
+        int x = 0;
+        int y = 40;
+        int width = 160;
+        int height = 40;
+    } toast_label;
+    
+    // 时钟文本位置
+    struct {
+        int align = GFX_ALIGN_TOP_MID;
+        int x = 0;
+        int y = 35;
+        int width = 160;
+        int height = 50;
+    } clock_label;
+    
+    // 听取动画位置
+    struct {
+        int align = GFX_ALIGN_TOP_MID;
+        int x = 0;
+        int y = 25;
+    } listen_anim;
+};
+
+// 统一的显示配置结构
+struct EmoteDisplayConfig {
+    EmotionMap emotion_map;     // 表情映射
+    IconMap icon_map;           // 图标映射
+    UILayoutConfig layout;      // UI布局配置
 };
 
 class EmoteDisplay : public Display {
@@ -20,16 +79,15 @@ protected:
     esp_lcd_panel_io_handle_t panel_io_ = nullptr;
     esp_lcd_panel_handle_t panel_ = nullptr;
     
-    // GFX 相关元素，从 EmoteEngine 移到这里
     gfx_handle_t engine_handle_ = nullptr;
     mmap_assets_handle_t assets_handle_ = nullptr;
     
     // GFX UI 元素
-    gfx_obj_t* obj_label_tips_ = nullptr;
-    gfx_obj_t* obj_label_time_ = nullptr;
+    gfx_obj_t* obj_label_toast_ = nullptr;
+    gfx_obj_t* obj_label_clock_ = nullptr;
     gfx_obj_t* obj_anim_eye_ = nullptr;
-    gfx_obj_t* obj_anim_mic_ = nullptr;
-    gfx_obj_t* obj_img_icon_ = nullptr;
+    gfx_obj_t* obj_anim_listen_ = nullptr;
+    gfx_obj_t* obj_img_status_ = nullptr;
     
     // 图标相关
     gfx_image_dsc_t icon_img_dsc_;
@@ -40,6 +98,9 @@ protected:
     
     // 主题相关
     std::string current_theme_name_;
+    
+    // 显示配置
+    EmoteDisplayConfig config_;
 
     void SetupUI(int width, int height);
     void SetUIDisplayMode(UIDisplayMode mode);
@@ -49,6 +110,10 @@ protected:
     static void clock_tm_callback(void* user_data);
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
+    
+    // 辅助函数：通过字符串查找资源ID
+    int GetIconId(const char* icon_name) const;
+    int GetEmotionId(const char* emotion_name) const;
 
 public:
     // Callback functions (public to be accessible from static helper functions)
@@ -57,14 +122,15 @@ public:
 
 protected:
     // 添加protected构造函数
-    EmoteDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, int width, int height, DisplayFonts fonts, mmap_assets_handle_t assets_handle);
+    EmoteDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, int width, int height, DisplayFonts fonts, mmap_assets_handle_t assets_handle, const EmoteDisplayConfig& config);
     
     
 public:
     virtual ~EmoteDisplay();
 
     // 实现 Display 接口的所有方法
-    virtual void SetEmotion(const char* emotion) override;
+    virtual void SetEmotion(const char* emotion) override;      
+    virtual void SetEmotionByID(int aaf_id) override; // 测试函数
     virtual void SetStatus(const char* status) override;
     virtual void SetChatMessage(const char* role, const char* content) override;
     virtual void SetIcon(const char* icon) override;
@@ -80,7 +146,8 @@ class SPIEmoteDisplay : public EmoteDisplay {
     public:
         SPIEmoteDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
                       int width, int height,
-                      DisplayFonts fonts, mmap_assets_handle_t assets_handle);
+                      DisplayFonts fonts, mmap_assets_handle_t assets_handle,
+                      const EmoteDisplayConfig& config);
 };
 
 } // namespace anim

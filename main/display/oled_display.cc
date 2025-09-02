@@ -392,6 +392,10 @@ void OledDisplay::SetEmotion(const char* emotion) {
     lv_label_set_text(emotion_label_, emotion);
 }
 
+void OledDisplay::SetEmotionByID(int aaf_id) {
+    ESP_LOGI(TAG, "SetEmotionByID: %d", aaf_id);
+}
+
 void OledDisplay::SetIcon(const char* icon) {
     DisplayLockGuard lock(this);
     if (emotion_label_ == nullptr) {

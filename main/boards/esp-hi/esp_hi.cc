@@ -18,12 +18,14 @@
 #include "esp_lcd_ili9341.h"
 
 #include "assets/lang_config.h"
-#include "anim_player.h"
-#include "emoji_display.h"
+#include "emote_display.h"
+#if CONFIG_USE_EMOTE_STYLE
+#include "mmap_generate_emoji_small.h"
+#endif
+
 #include "servo_dog_ctrl.h"
 #include "led_strip.h"
 #include "driver/rmt_tx.h"
-
 #include "sdkconfig.h"
 
 #ifdef CONFIG_ESP_HI_WEB_CONTROL_ENABLED
@@ -31,6 +33,79 @@
 #endif //CONFIG_ESP_HI_WEB_CONTROL_ENABLED
 
 #define TAG "ESP_HI"
+
+LV_FONT_DECLARE(font_puhui_14_1);
+#if CONFIG_USE_EMOTE_STYLE
+LV_FONT_DECLARE(font_puhui_20_4_basic);
+#else
+LV_FONT_DECLARE(font_awesome_16_4);
+#endif
+
+#if CONFIG_USE_EMOTE_STYLE
+static const anim::EmoteDisplayConfig kEmoteConfig = {
+    .emotion_map = {
+        {"happy",       {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"laughing",    {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"funny",       {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"loving",      {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"embarrassed", {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"confident",   {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"delicious",   {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"sad",         {MMAP_EMOJI_SMALL_SAD_EAF,      true,  20}},
+        {"crying",      {MMAP_EMOJI_SMALL_CRY_EAF,      true,  20}},
+        {"sleepy",      {MMAP_EMOJI_SMALL_SLEEP_EAF,    true,  20}},
+        {"silly",       {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"angry",       {MMAP_EMOJI_SMALL_ANGRY_EAF,    true,  20}},
+        {"surprised",   {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"shocked",     {MMAP_EMOJI_SMALL_SHOCKED_EAF,  true,  20}},
+        {"thinking",    {MMAP_EMOJI_SMALL_CONFUSED_EAF, true,  20}},
+        {"winking",     {MMAP_EMOJI_SMALL_NEUTRAL_EAF,  true,  20}},
+        {"relaxed",     {MMAP_EMOJI_SMALL_HAPPY_EAF,    true,  20}},
+        {"confused",    {MMAP_EMOJI_SMALL_CONFUSED_EAF, true,  20}},
+        {"neutral",     {MMAP_EMOJI_SMALL_WINKING_EAF,  false, 20}},
+        {"idle",        {MMAP_EMOJI_SMALL_NEUTRAL_EAF,  false, 20}},
+        {"listen",      {MMAP_EMOJI_SMALL_LISTEN_EAF,   true,  20}}, // 添加监听动画
+    },
+    .icon_map = {
+        {"wifi",     MMAP_EMOJI_SMALL_ICON_WIFI_BIN},
+        {"battery",  MMAP_EMOJI_SMALL_ICON_BATTERY_BIN},
+        {"mic",      MMAP_EMOJI_SMALL_ICON_MIC_BIN},
+        {"speaker",  MMAP_EMOJI_SMALL_ICON_SPEAKER_BIN},
+        {"error",    MMAP_EMOJI_SMALL_ICON_WIFI_FAILED_BIN},
+    },
+    .layout = {
+        .eye_anim = {
+            .align = GFX_ALIGN_LEFT_MID,
+            .x = 0,
+            .y = 15
+        },
+        .status_icon = {
+            .align = GFX_ALIGN_TOP_MID,
+            .x = -60,
+            .y = 3
+        },
+        .toast_label = {
+            .align = GFX_ALIGN_TOP_MID,
+            .x = 0,
+            .y = 1,
+            .width = 120,
+            .height = 45
+        },
+        .clock_label = {
+            .align = GFX_ALIGN_TOP_MID,
+            .x = 0,
+            .y = 0,
+            .width = 120,
+            .height = 55
+        },
+        .listen_anim = {
+            .align = GFX_ALIGN_TOP_MID,
+            .x = 0,
+            .y = 5
+        }
+    },
+};
+#endif
 
 static const ili9341_lcd_init_cmd_t vendor_specific_init[] = {
     {0x11, NULL, 0, 120},     // Sleep out, Delay 120ms
@@ -75,7 +150,12 @@ private:
     Button boot_button_;
     Button audio_wake_button_;
     Button move_wake_button_;
-    anim::EmojiWidget* display_ = nullptr;
+#if CONFIG_USE_EMOTE_STYLE
+    anim::EmoteDisplay* display_ = nullptr;
+    mmap_assets_handle_t assets_handle_ = nullptr;
+#else
+    LcdDisplay* display_;
+#endif
     bool web_server_initialized_ = false;
     led_strip_handle_t led_strip_;
     bool led_on_ = false;
@@ -156,7 +236,7 @@ private:
                     ESP_LOGI(TAG, "gesture detected");
                     gesture_state = 0;
                     auto &app = Application::GetInstance();
-                    app.ToggleChatState();
+                    // app.ToggleChatState();
                 }
                 break;
             }
@@ -173,7 +253,18 @@ private:
             if (app.GetDeviceState() == kDeviceStateStarting && !WifiStation::GetInstance().IsConnected()) {
                 ResetWifiConfiguration();
             }
+            
+#if CONFIG_USE_EMOTE_STYLE
+            // 测试功能：循环播放表情ID
+            static int aaf_id = MMAP_EMOJI_SMALL_HAPPY_EAF;
+            if(aaf_id > MMAP_EMOJI_SMALL_WINKING_EAF) {
+                aaf_id = MMAP_EMOJI_SMALL_HAPPY_EAF;
+            }
+            TestSetEye(aaf_id);
+            aaf_id++;
+#else
             app.ToggleChatState();
+#endif
         });
 
         audio_wake_button_.OnPressDown([this]() {
@@ -239,6 +330,22 @@ private:
         ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO));
     }
 
+    void InitializeAssets() 
+    {
+#if CONFIG_USE_EMOTE_STYLE
+        // Initialize assets for EmoteDisplay
+        const mmap_assets_config_t assets_cfg = {
+            .partition_label = "assets",
+            .max_files = MMAP_EMOJI_SMALL_FILES,
+            .checksum = MMAP_EMOJI_SMALL_CHECKSUM,
+            .flags = {.mmap_enable = true, .full_check = true}
+        };
+
+        ESP_ERROR_CHECK(mmap_assets_new(&assets_cfg, &assets_handle_));
+        ESP_LOGI(TAG, "Assets initialized successfully");
+#endif
+    }
+
     void InitializeLcdDisplay()
     {
         esp_lcd_panel_io_handle_t panel_io = nullptr;
@@ -281,9 +388,24 @@ private:
 
         esp_lcd_panel_disp_on_off(panel, true);
 
-        ESP_LOGI(TAG, "Create emoji widget, panel: %p, panel_io: %p", panel, panel_io);
-        display_ = new anim::EmojiWidget(panel, panel_io);
+#if CONFIG_USE_EMOTE_STYLE
+        display_ = new anim::SPIEmoteDisplay(panel_io, panel, DISPLAY_WIDTH, DISPLAY_HEIGHT, {
+            .text_font = &font_puhui_14_1,
+            .basic_font = &font_puhui_20_4_basic,
+        }, assets_handle_, kEmoteConfig);
+#else
+        display_ = new SpiLcdDisplay(panel_io, panel,
+                                    DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
+                                    {
+                                        .text_font = &font_puhui_14_1,
+                                        .icon_font = &font_awesome_16_4,
+                                        .emoji_font = font_emoji_32_init(),
+                                    });
+#endif
+    }
 
+    void InitializeRobot()
+    {
         servo_dog_ctrl_config_t config = {
             .fl_gpio_num = FL_GPIO_NUM,
             .fr_gpio_num = FR_GPIO_NUM,
@@ -393,7 +515,9 @@ public:
         InitializeButtons();
         InitializeIot();
         InitializeSpi();
+        InitializeAssets();
         InitializeLcdDisplay();
+        InitializeRobot();
         InitializeTools();
     }
 
@@ -413,6 +537,19 @@ public:
     {
         return display_;
     }
+
+#if CONFIG_USE_EMOTE_STYLE
+    void TestSetEye(int aaf_id)
+    {
+        if (display_) {
+            anim::EmoteDisplay* emote_display = static_cast<anim::EmoteDisplay*>(display_);
+            if (emote_display) {
+                emote_display->SetEmotionByID(aaf_id);
+                ESP_LOGI(TAG, "Test SetEye called: aaf_id=%d", aaf_id);
+            }
+        }
+    }
+#endif
 };
 
 DECLARE_BOARD(EspHi);

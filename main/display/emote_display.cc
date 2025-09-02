@@ -1,8 +1,6 @@
 
 #include <cstring>
 #include <memory>
-#include <unordered_map>
-#include <tuple>
 #include <esp_log.h>
 #include <esp_lcd_panel_io.h>
 #include <freertos/FreeRTOS.h>
@@ -11,31 +9,14 @@
 #include <time.h>
 
 #include "config.h"
-#include "assets/lang_config.h"
 #include "display/lcd_display.h"
+#include "assets/lang_config.h"
 #include "emote_display.h"
+
 
 namespace anim {
 
 static const char* TAG = "emoji";
-
-
-enum MMAP_EMOJI_NORMAL_LISTS {
-    MMAP_EMOJI_NORMAL_ANGRY_ONE_AAF = 0,        /*!< angry_one.aaf */
-    MMAP_EMOJI_NORMAL_DIZZY_ONE_AAF = 1,        /*!< dizzy_one.aaf */
-    MMAP_EMOJI_NORMAL_ENJOY_ONE_AAF = 2,        /*!< enjoy_one.aaf */
-    MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF = 3,        /*!< happy_one.aaf */
-    MMAP_EMOJI_NORMAL_IDLE_ONE_AAF = 4,        /*!< idle_one.aaf */
-    MMAP_EMOJI_NORMAL_LISTEN_AAF = 5,        /*!< listen.aaf */
-    MMAP_EMOJI_NORMAL_SAD_ONE_AAF = 6,        /*!< sad_one.aaf */
-    MMAP_EMOJI_NORMAL_SHOCKED_ONE_AAF = 7,        /*!< shocked_one.aaf */
-    MMAP_EMOJI_NORMAL_THINKING_ONE_AAF = 8,        /*!< thinking_one.aaf */
-    MMAP_EMOJI_NORMAL_ICON_BATTERY_BIN = 9,        /*!< icon_Battery.bin */
-    MMAP_EMOJI_NORMAL_ICON_WIFI_FAILED_BIN = 10,        /*!< icon_WiFi_failed.bin */
-    MMAP_EMOJI_NORMAL_ICON_MIC_BIN = 11,        /*!< icon_mic.bin */
-    MMAP_EMOJI_NORMAL_ICON_SPEAKER_ZZZ_BIN = 12,        /*!< icon_speaker_zzz.bin */
-    MMAP_EMOJI_NORMAL_ICON_WIFI_BIN = 13,        /*!< icon_wifi.bin */
-};
 
 bool EmoteDisplay::OnFlushIoReady(esp_lcd_panel_io_handle_t panel_io,
                                  esp_lcd_panel_io_event_data_t* edata,
@@ -56,20 +37,20 @@ void EmoteDisplay::OnFlush(gfx_handle_t handle, int x_start, int y_start,
 
 void EmoteDisplay::SetUIDisplayMode(UIDisplayMode mode)
 {
-    gfx_obj_set_visible(obj_anim_mic_, false);
-    gfx_obj_set_visible(obj_label_time_, false);
-    gfx_obj_set_visible(obj_label_tips_, false);
+    gfx_obj_set_visible(obj_anim_listen_, false);
+    gfx_obj_set_visible(obj_label_clock_, false);
+    gfx_obj_set_visible(obj_label_toast_, false);
 
     // Show the selected control
     switch (mode) {
-    case UIDisplayMode::SHOW_ANIM_TOP:
-        gfx_obj_set_visible(obj_anim_mic_, true);
+    case UIDisplayMode::SHOW_ANIM_LISTENING:
+        gfx_obj_set_visible(obj_anim_listen_, true);
         break;
-    case UIDisplayMode::SHOW_TIME:
-        gfx_obj_set_visible(obj_label_time_, true);
+    case UIDisplayMode::SHOW_CLOCK:
+        gfx_obj_set_visible(obj_label_clock_, true);
         break;
-    case UIDisplayMode::SHOW_TIPS:
-        gfx_obj_set_visible(obj_label_tips_, true);
+    case UIDisplayMode::SHOW_TOAST:
+        gfx_obj_set_visible(obj_label_toast_, true);
         break;
     }
 }
@@ -77,7 +58,8 @@ void EmoteDisplay::SetUIDisplayMode(UIDisplayMode mode)
 void EmoteDisplay::clock_tm_callback(void* user_data)
 {
     EmoteDisplay* display = static_cast<EmoteDisplay*>(user_data);
-    if (display->current_icon_type_ == MMAP_EMOJI_NORMAL_ICON_BATTERY_BIN) {
+    int battery_icon_id = display->GetIconId("battery");
+    if (display->current_icon_type_ == battery_icon_id) {
         time_t now;
         struct tm timeinfo;
         time(&now);
@@ -89,8 +71,8 @@ void EmoteDisplay::clock_tm_callback(void* user_data)
         char time_str[6];
         snprintf(time_str, sizeof(time_str), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
 
-        gfx_label_set_text(display->obj_label_time_, time_str);
-        display->SetUIDisplayMode(UIDisplayMode::SHOW_TIME);
+        gfx_label_set_text(display->obj_label_clock_, time_str);
+        display->SetUIDisplayMode(UIDisplayMode::SHOW_CLOCK);
     }
 }
 
@@ -104,16 +86,22 @@ void EmoteDisplay::SetImageDesc(gfx_image_dsc_t* img_dsc, int asset_id)
     img_dsc->data_size = img_size - sizeof(gfx_image_header_t);
 }
 
-EmoteDisplay::EmoteDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, int width, int height, DisplayFonts fonts, mmap_assets_handle_t assets_handle)
-    : panel_io_(panel_io), panel_(panel), assets_handle_(assets_handle), current_icon_type_(MMAP_EMOJI_NORMAL_ICON_BATTERY_BIN), fonts_(fonts)
+EmoteDisplay::EmoteDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, int width, int height, DisplayFonts fonts, mmap_assets_handle_t assets_handle, const EmoteDisplayConfig& config)
+    : panel_io_(panel_io), 
+      panel_(panel), 
+      assets_handle_(assets_handle), 
+      current_icon_type_(0),
+      fonts_(fonts), 
+      config_(config)
 {
     ESP_LOGI(TAG, "EmoteDisplay base constructor, width: %d, height: %d", width, height);
 }
 
 SPIEmoteDisplay::SPIEmoteDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
                                  int width, int height,
-                                 DisplayFonts fonts, mmap_assets_handle_t assets_handle)
-    : EmoteDisplay(panel_io, panel, width, height, fonts, assets_handle)
+                                 DisplayFonts fonts, mmap_assets_handle_t assets_handle,
+                                 const EmoteDisplayConfig& config)
+    : EmoteDisplay(panel_io, panel, width, height, fonts, assets_handle, config)
 {
     ESP_LOGI(TAG, "initializing GFX engine and UI components");
 
@@ -153,62 +141,64 @@ SPIEmoteDisplay::SPIEmoteDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_pan
 
 void EmoteDisplay::SetupUI(int width, int height)
 {
-    ESP_LOGI(TAG, "Setting up UI components");
-
     DisplayLockGuard lock(this);
 
     gfx_emote_set_bg_color(engine_handle_, GFX_COLOR_HEX(0x000000));
     
     // Initialize eye animation
+    int idle_anim_id = GetEmotionId("idle");
+    const void* eye_anim_data = mmap_assets_get_mem(assets_handle_, idle_anim_id);
+    size_t eye_anim_size = mmap_assets_get_size(assets_handle_, idle_anim_id);
+
     obj_anim_eye_ = gfx_anim_create(engine_handle_);
-    const void* eye_anim_data = mmap_assets_get_mem(assets_handle_, MMAP_EMOJI_NORMAL_IDLE_ONE_AAF);
-    size_t eye_anim_size = mmap_assets_get_size(assets_handle_, MMAP_EMOJI_NORMAL_IDLE_ONE_AAF);
     gfx_anim_set_src(obj_anim_eye_, eye_anim_data, eye_anim_size);
-    // gfx_obj_align(obj_anim_eye_, GFX_ALIGN_LEFT_MID, 10, -20);
-    gfx_obj_align(obj_anim_eye_, GFX_ALIGN_LEFT_MID, 0, 20);
+    gfx_obj_align(obj_anim_eye_, config_.layout.eye_anim.align, config_.layout.eye_anim.x, config_.layout.eye_anim.y);
     gfx_anim_set_auto_mirror(obj_anim_eye_, true);
     gfx_anim_set_segment(obj_anim_eye_, 0, 0xFFFF, 20, false);
     gfx_anim_start(obj_anim_eye_);
 
-    // Initialize tips label
-    obj_label_tips_ = gfx_label_create(engine_handle_);
-    gfx_obj_align(obj_label_tips_, GFX_ALIGN_TOP_MID, 0, 40);
-    gfx_obj_set_size(obj_label_tips_, 160, 40);
-    gfx_label_set_text(obj_label_tips_, Lang::Strings::INITIALIZING);
-    gfx_label_set_color(obj_label_tips_, GFX_COLOR_HEX(0xFFFFFF));
-    gfx_label_set_text_align(obj_label_tips_, GFX_TEXT_ALIGN_CENTER);
-    gfx_label_set_long_mode(obj_label_tips_, GFX_LABEL_LONG_SCROLL);
-    gfx_label_set_scroll_speed(obj_label_tips_, 20);
-    gfx_label_set_scroll_loop(obj_label_tips_, true);
-    gfx_label_set_font(obj_label_tips_, (gfx_font_t)fonts_.text_font);
+    // Initialize icon
+    int wifi_failed_icon_id = GetIconId("error");
+    obj_img_status_ = gfx_img_create(engine_handle_);
+    gfx_obj_align(obj_img_status_, config_.layout.status_icon.align, config_.layout.status_icon.x, config_.layout.status_icon.y);
+    SetImageDesc(&icon_img_dsc_, wifi_failed_icon_id);
+    gfx_img_set_src(obj_img_status_, static_cast<void*>(&icon_img_dsc_));
+        
+    // Set initial state
+    current_icon_type_ = wifi_failed_icon_id;
+    SetUIDisplayMode(UIDisplayMode::SHOW_TOAST);
+
+    // Initialize toast label
+    obj_label_toast_ = gfx_label_create(engine_handle_);
+    gfx_obj_align(obj_label_toast_, config_.layout.toast_label.align, config_.layout.toast_label.x, config_.layout.toast_label.y);
+    gfx_obj_set_size(obj_label_toast_, config_.layout.toast_label.width, config_.layout.toast_label.height);
+    gfx_label_set_text(obj_label_toast_, Lang::Strings::INITIALIZING);
+    gfx_label_set_color(obj_label_toast_, GFX_COLOR_HEX(0xFFFFFF));
+    gfx_label_set_text_align(obj_label_toast_, GFX_TEXT_ALIGN_CENTER);
+    gfx_label_set_long_mode(obj_label_toast_, GFX_LABEL_LONG_SCROLL);
+    gfx_label_set_scroll_speed(obj_label_toast_, 20);
+    gfx_label_set_scroll_loop(obj_label_toast_, true);
+    gfx_label_set_font(obj_label_toast_, (gfx_font_t)fonts_.text_font);
 
     // Initialize time label
-    obj_label_time_ = gfx_label_create(engine_handle_);
-    gfx_obj_align(obj_label_time_, GFX_ALIGN_TOP_MID, 0, 40);
-    gfx_obj_set_size(obj_label_time_, 160, 50);
-    gfx_label_set_text(obj_label_time_, "--:--");
-    gfx_label_set_color(obj_label_time_, GFX_COLOR_HEX(0xFFFFFF));
-    gfx_label_set_text_align(obj_label_time_, GFX_TEXT_ALIGN_CENTER);
-    gfx_label_set_font(obj_label_time_, (gfx_font_t)fonts_.text_font);
+    obj_label_clock_ = gfx_label_create(engine_handle_);
+    gfx_obj_align(obj_label_clock_, config_.layout.clock_label.align, config_.layout.clock_label.x, config_.layout.clock_label.y);
+    gfx_obj_set_size(obj_label_clock_, config_.layout.clock_label.width, config_.layout.clock_label.height);
+    gfx_label_set_text(obj_label_clock_, "--:--");
+    gfx_label_set_color(obj_label_clock_, GFX_COLOR_HEX(0xFFFFFF));
+    gfx_label_set_text_align(obj_label_clock_, GFX_TEXT_ALIGN_CENTER);
+    gfx_label_set_font(obj_label_clock_, (gfx_font_t)fonts_.basic_font);
 
-    // Initialize mic animation
-    obj_anim_mic_ = gfx_anim_create(engine_handle_);
-    gfx_obj_align(obj_anim_mic_, GFX_ALIGN_TOP_MID, 0, 25);
-    const void* mic_anim_data = mmap_assets_get_mem(assets_handle_, MMAP_EMOJI_NORMAL_LISTEN_AAF);
-    size_t mic_anim_size = mmap_assets_get_size(assets_handle_, MMAP_EMOJI_NORMAL_LISTEN_AAF);
-    gfx_anim_set_src(obj_anim_mic_, mic_anim_data, mic_anim_size);
-    gfx_anim_start(obj_anim_mic_);
-    gfx_obj_set_visible(obj_anim_mic_, false);
-
-    // Initialize icon
-    obj_img_icon_ = gfx_img_create(engine_handle_);
-    gfx_obj_align(obj_img_icon_, GFX_ALIGN_TOP_MID, -100, 38);
-    SetImageDesc(&icon_img_dsc_, MMAP_EMOJI_NORMAL_ICON_WIFI_FAILED_BIN);
-    gfx_img_set_src(obj_img_icon_, static_cast<void*>(&icon_img_dsc_));
+    // Initialize mic listen animation
+    int listen_anim_id = GetEmotionId("listen");
+    const void* mic_anim_data = mmap_assets_get_mem(assets_handle_, listen_anim_id);
+    size_t mic_anim_size = mmap_assets_get_size(assets_handle_, listen_anim_id);
     
-    // Set initial state
-    current_icon_type_ = MMAP_EMOJI_NORMAL_ICON_WIFI_FAILED_BIN;
-    SetUIDisplayMode(UIDisplayMode::SHOW_TIPS);
+    obj_anim_listen_ = gfx_anim_create(engine_handle_);
+    gfx_obj_align(obj_anim_listen_, config_.layout.listen_anim.align, config_.layout.listen_anim.x, config_.layout.listen_anim.y);
+    gfx_anim_set_src(obj_anim_listen_, mic_anim_data, mic_anim_size);
+    gfx_anim_start(obj_anim_listen_);
+    gfx_obj_set_visible(obj_anim_listen_, false);
     
     // Create timer for clock updates
     gfx_timer_create(engine_handle_, clock_tm_callback, 1000, this);
@@ -220,8 +210,6 @@ EmoteDisplay::~EmoteDisplay()
         gfx_emote_deinit(engine_handle_);
         engine_handle_ = nullptr;
     }
-
-    // Note: assets_handle_ is now managed by the board layer, not deleted here
 }
 
 void EmoteDisplay::SetEmotion(const char* emotion)
@@ -234,37 +222,25 @@ void EmoteDisplay::SetEmotion(const char* emotion)
 
     ESP_LOGW(TAG, "SetEmotion: %s", emotion);
 
-    using EmotionParam = std::tuple<int, bool, int>;
-    static const std::unordered_map<std::string, EmotionParam> emotion_map = {
-        {"happy",       {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"laughing",    {MMAP_EMOJI_NORMAL_ENJOY_ONE_AAF,     true,  20}},
-        {"funny",       {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"loving",      {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"embarrassed", {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"confident",   {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"delicious",   {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"sad",         {MMAP_EMOJI_NORMAL_SAD_ONE_AAF,       true,  20}},
-        {"crying",      {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"sleepy",      {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"silly",       {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"angry",       {MMAP_EMOJI_NORMAL_ANGRY_ONE_AAF,     true,  20}},
-        {"surprised",   {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"shocked",     {MMAP_EMOJI_NORMAL_SHOCKED_ONE_AAF,   true,  20}},
-        {"thinking",    {MMAP_EMOJI_NORMAL_THINKING_ONE_AAF,  true,  20}},
-        {"winking",     {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"relaxed",     {MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF,     true,  20}},
-        {"confused",    {MMAP_EMOJI_NORMAL_DIZZY_ONE_AAF,     true,  20}},
-        {"neutral",     {MMAP_EMOJI_NORMAL_IDLE_ONE_AAF,      false, 20}},
-        {"idle",        {MMAP_EMOJI_NORMAL_IDLE_ONE_AAF,      false, 20}},
-    };
-
-    auto it = emotion_map.find(emotion);
-    if (it != emotion_map.end()) {
+    auto it = config_.emotion_map.find(emotion);
+    if (it != config_.emotion_map.end()) {
         int aaf = std::get<0>(it->second);
         bool repeat = std::get<1>(it->second);
         int fps = std::get<2>(it->second);
         SetEyes(aaf, repeat, fps);
     }
+}
+
+void EmoteDisplay::SetEmotionByID(int aaf_id)
+{
+    if (!engine_handle_) {
+        return;
+    }
+
+    DisplayLockGuard lock(this);
+
+    ESP_LOGW(TAG, "SetEmotionByID: %d", aaf_id);
+    SetEyes(aaf_id, true, 20);
 }
 
 void EmoteDisplay::SetEyes(int aaf, bool repeat, int fps)
@@ -281,6 +257,18 @@ void EmoteDisplay::SetEyes(int aaf, bool repeat, int fps)
     gfx_anim_start(obj_anim_eye_);
 }
 
+int EmoteDisplay::GetIconId(const char* icon_name) const
+{
+    auto it = config_.icon_map.find(icon_name);
+    return (it != config_.icon_map.end()) ? it->second : 0;
+}
+
+int EmoteDisplay::GetEmotionId(const char* emotion_name) const
+{
+    auto it = config_.emotion_map.find(emotion_name);
+    return (it != config_.emotion_map.end()) ? std::get<0>(it->second) : 0;
+}
+
 void EmoteDisplay::SetIcon(int asset_id)
 {
     if (!engine_handle_) {
@@ -288,7 +276,7 @@ void EmoteDisplay::SetIcon(int asset_id)
     }
 
     SetImageDesc(&icon_img_dsc_, asset_id);
-    gfx_img_set_src(obj_img_icon_, static_cast<void*>(&icon_img_dsc_));
+    gfx_img_set_src(obj_img_status_, static_cast<void*>(&icon_img_dsc_));
     current_icon_type_ = asset_id;
 }
 
@@ -307,8 +295,8 @@ void EmoteDisplay::SetChatMessage(const char* role, const char* content)
             pos += 1; // 移动到下一个位置
         }
         
-        gfx_label_set_text(obj_label_tips_, processed_content.c_str());
-        SetUIDisplayMode(UIDisplayMode::SHOW_TIPS);
+        gfx_label_set_text(obj_label_toast_, processed_content.c_str());
+        SetUIDisplayMode(UIDisplayMode::SHOW_TOAST);
     }
 }
 
@@ -322,22 +310,22 @@ void EmoteDisplay::SetStatus(const char* status)
     ESP_LOGW(TAG, "SetStatus: %s", status);
 
     if (std::strcmp(status, Lang::Strings::LISTENING) == 0) {
-        SetUIDisplayMode(UIDisplayMode::SHOW_ANIM_TOP);
-        SetEyes(MMAP_EMOJI_NORMAL_HAPPY_ONE_AAF, true, 20);
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_MIC_BIN);
+        SetUIDisplayMode(UIDisplayMode::SHOW_ANIM_LISTENING);
+        SetEyes(GetEmotionId("happy"), true, 20);
+        SetIcon("mic");
     } else if (std::strcmp(status, Lang::Strings::STANDBY) == 0) {
-        SetUIDisplayMode(UIDisplayMode::SHOW_TIME);
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_BATTERY_BIN);
+        SetUIDisplayMode(UIDisplayMode::SHOW_CLOCK);
+        SetIcon("battery");
     } else if (std::strcmp(status, Lang::Strings::SPEAKING) == 0) {
-        SetUIDisplayMode(UIDisplayMode::SHOW_TIPS);
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_SPEAKER_ZZZ_BIN);
+        SetUIDisplayMode(UIDisplayMode::SHOW_TOAST);
+        SetIcon("speaker");
     } else if (std::strcmp(status, Lang::Strings::ERROR) == 0) {
-        SetUIDisplayMode(UIDisplayMode::SHOW_TIPS);
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_WIFI_FAILED_BIN);
+        SetUIDisplayMode(UIDisplayMode::SHOW_TOAST);
+        SetIcon("error");
     }
 
     if (std::strcmp(status, Lang::Strings::CONNECTING) != 0) {
-        gfx_label_set_text(obj_label_tips_, status);
+        gfx_label_set_text(obj_label_toast_, status);
     }
 }
 
@@ -363,17 +351,9 @@ void EmoteDisplay::SetIcon(const char* icon)
         return;
     }
     
-    // 将图标名称映射到资源ID
-    if (std::strcmp(icon, "wifi") == 0) {
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_WIFI_BIN);
-    } else if (std::strcmp(icon, "battery") == 0) {
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_BATTERY_BIN);
-    } else if (std::strcmp(icon, "mic") == 0) {
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_MIC_BIN);
-    } else if (std::strcmp(icon, "speaker") == 0) {
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_SPEAKER_ZZZ_BIN);
-    } else if (std::strcmp(icon, "error") == 0) {
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_WIFI_FAILED_BIN);
+    auto it = config_.icon_map.find(icon);
+    if (it != config_.icon_map.end()) {
+        SetIcon(it->second);
     }
 }
 
@@ -382,7 +362,7 @@ void EmoteDisplay::SetPreviewImage(const void* image)
     // EmoteDisplay 不支持预览图片，使用默认图标
     if (image) {
         ESP_LOGI(TAG, "EmoteDisplay: Preview image not supported, using default icon");
-        SetIcon(MMAP_EMOJI_NORMAL_ICON_BATTERY_BIN);
+        SetIcon("battery");
     }
 }
 
@@ -411,8 +391,8 @@ void EmoteDisplay::ShowNotification(const char* notification, int duration_ms)
     ESP_LOGW(TAG, "EmoteDisplay: Show notification: %s", notification);
     
     DisplayLockGuard lock(this);
-    gfx_label_set_text(obj_label_tips_, notification);
-    SetUIDisplayMode(UIDisplayMode::SHOW_TIPS);
+    gfx_label_set_text(obj_label_toast_, notification);
+    SetUIDisplayMode(UIDisplayMode::SHOW_TOAST);
 }
 
 void EmoteDisplay::ShowNotification(const std::string& notification, int duration_ms)

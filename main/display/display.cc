@@ -47,6 +47,11 @@ void Display::SetEmotion(const char* emotion) {
     ESP_LOGI(TAG, "SetEmotion: %s", emotion);
 }
 
+void Display::SetEmotionByID(int aaf_id) {
+    // 基类实现，子类需要重写
+    ESP_LOGI(TAG, "SetEmotionByID: %d", aaf_id);
+}
+
 void Display::SetIcon(const char* icon) {
     // 基类实现，子类需要重写
     ESP_LOGI(TAG, "SetIcon: %s", icon);
