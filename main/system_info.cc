@@ -149,3 +149,53 @@ void SystemInfo::PrintHeapStats() {
     int min_free_sram = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
     ESP_LOGI(TAG, "free sram: %u minimal sram: %u", free_sram, min_free_sram);
 }
+
+void SystemInfo::PrintDetailedMemoryInfo() {
+    // 获取各种内存信息
+    size_t free_heap = esp_get_free_heap_size();
+    size_t min_free_heap = esp_get_minimum_free_heap_size();
+    size_t total_heap = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
+    
+    // 获取不同内存类型的信息
+    size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    size_t min_free_internal = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+    size_t free_spiram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    size_t min_free_spiram = heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM);
+    
+    // 获取最大连续空闲块
+    size_t largest_free_block = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+    
+    // 计算内存使用率
+    size_t used_heap = total_heap - free_heap;
+    float usage_percentage = (float)used_heap * 100.0f / total_heap;
+    
+    ESP_LOGI(TAG, "=== ESP32 Memory Status ===");
+    ESP_LOGI(TAG, "Total Heap: %d bytes (%.2f KB)", total_heap, total_heap / 1024.0f);
+    ESP_LOGI(TAG, "Free Heap: %d bytes (%.2f KB)", free_heap, free_heap / 1024.0f);
+    ESP_LOGI(TAG, "Used Heap: %d bytes (%.2f KB) - %.1f%%", used_heap, used_heap / 1024.0f, usage_percentage);
+    ESP_LOGI(TAG, "Min Free Heap: %d bytes (%.2f KB)", min_free_heap, min_free_heap / 1024.0f);
+    ESP_LOGI(TAG, "Largest Free Block: %d bytes (%.2f KB)", largest_free_block, largest_free_block / 1024.0f);
+    
+    ESP_LOGI(TAG, "--- Internal RAM ---");
+    ESP_LOGI(TAG, "Free Internal: %d bytes (%.2f KB)", free_internal, free_internal / 1024.0f);
+    ESP_LOGI(TAG, "Min Free Internal: %d bytes (%.2f KB)", min_free_internal, min_free_internal / 1024.0f);
+    
+    if (free_spiram > 0) {
+        ESP_LOGI(TAG, "--- SPIRAM ---");
+        ESP_LOGI(TAG, "Free SPIRAM: %d bytes (%.2f KB)", free_spiram, free_spiram / 1024.0f);
+        ESP_LOGI(TAG, "Min Free SPIRAM: %d bytes (%.2f KB)", min_free_spiram, min_free_spiram / 1024.0f);
+    }
+    
+    ESP_LOGI(TAG, "========================");
+}
+
+void SystemInfo::PrintQuickMemoryInfo() {
+    size_t free_heap = esp_get_free_heap_size();
+    size_t min_free_heap = esp_get_minimum_free_heap_size();
+    size_t total_heap = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
+    size_t used_heap = total_heap - free_heap;
+    float usage_percentage = (float)used_heap * 100.0f / total_heap;
+    
+    ESP_LOGW(TAG, "💾 Memory: Free=%dKB (%.1f%% used), Min=%dKB", 
+             free_heap / 1024, usage_percentage, min_free_heap / 1024);
+}

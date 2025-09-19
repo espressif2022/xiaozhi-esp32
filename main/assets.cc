@@ -257,15 +257,16 @@ bool Assets::Apply() {
     if (cJSON_IsString(font)) {
         std::string fonts_text_file = font->valuestring;
         if (GetAssetData(fonts_text_file, ptr, size)) {
-            auto text_font = std::make_shared<LvglCBinFont>(ptr);
-            if (text_font->font() == nullptr) {
-                ESP_LOGE(TAG, "Failed to load fonts.bin");
-                return false;
-            }
+            // auto text_font = std::make_shared<LvglCBinFont>(ptr);
+            // if (text_font->font() == nullptr) {
+            //     ESP_LOGE(TAG, "Failed to load fonts.bin");
+            //     return false;
+            // }
 
-            if (emote_display) {
-                emote_display->AddTextFont(text_font);
-            }
+            // if (emote_display) {
+            //     emote_display->AddTextFont(text_font);
+            // }
+            ESP_LOGI(TAG, "The text font file %s is found", fonts_text_file.c_str());
         } else {
             ESP_LOGE(TAG, "The font file %s is not found", fonts_text_file.c_str());
         }

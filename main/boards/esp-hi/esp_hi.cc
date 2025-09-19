@@ -12,14 +12,13 @@
 #include <esp_event.h>
 
 #include "display/lcd_display.h"
+#include "display/emote_display.h"
 #include <esp_lcd_panel_vendor.h>
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 #include "esp_lcd_ili9341.h"
 
 #include "assets/lang_config.h"
-#include "anim_player.h"
-#include "emoji_display.h"
 #include "servo_dog_ctrl.h"
 #include "led_strip.h"
 #include "driver/rmt_tx.h"
@@ -76,7 +75,7 @@ private:
     Button boot_button_;
     Button audio_wake_button_;
     Button move_wake_button_;
-    anim::EmojiWidget* display_ = nullptr;
+    Display* display_ = nullptr;
     bool web_server_initialized_ = false;
     led_strip_handle_t led_strip_;
     bool led_on_ = false;
@@ -282,8 +281,12 @@ private:
 
         esp_lcd_panel_disp_on_off(panel, true);
 
-        ESP_LOGI(TAG, "Create emoji widget, panel: %p, panel_io: %p", panel, panel_io);
-        display_ = new anim::EmojiWidget(panel, panel_io);
+#if CONFIG_USE_EMOTE_MESSAGE_STYLE
+        display_ = new emote::EmoteDisplay(panel, panel_io, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+#else
+        display_ = new SpiLcdDisplay(panel_io, panel,
+            DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+#endif
 
 #if CONFIG_ESP_CONSOLE_NONE
         servo_dog_ctrl_config_t config = {

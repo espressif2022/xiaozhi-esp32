@@ -38,7 +38,6 @@ static const char* TAG = "EmoteDisplay";
 // UI Element Names - Centralized Management
 #define UI_ELEMENT_EYE_ANIM      "eye_anim"
 #define UI_ELEMENT_TOAST_LABEL   "toast_label"
-#define UI_ELEMENT_CLOCK_LABEL   "clock_label"
 #define UI_ELEMENT_LISTEN_ANIM   "listen_anim"
 #define UI_ELEMENT_STATUS_ICON   "status_icon"
 
@@ -59,7 +58,6 @@ using FlushCallback = std::function<void(gfx_handle_t, int, int, int, int, const
 
 // UI element management
 static gfx_obj_t* g_obj_label_toast = nullptr;
-static gfx_obj_t* g_obj_label_clock = nullptr;
 static gfx_obj_t* g_obj_anim_eye = nullptr;
 static gfx_obj_t* g_obj_anim_listen = nullptr;
 static gfx_obj_t* g_obj_img_status = nullptr;
@@ -161,7 +159,6 @@ static void SetUIDisplayMode(const UIDisplayMode mode, EmoteDisplay* const displ
     }
 
     gfx_obj_set_visible(g_obj_anim_listen, false);
-    gfx_obj_set_visible(g_obj_label_clock, false);
     gfx_obj_set_visible(g_obj_label_toast, false);
 
     // Show the selected control
@@ -177,7 +174,7 @@ static void SetUIDisplayMode(const UIDisplayMode mode, EmoteDisplay* const displ
         break;
     }
     case UIDisplayMode::SHOW_TIME:
-        gfx_obj_set_visible(g_obj_label_clock, true);
+        gfx_obj_set_visible(g_obj_label_toast, true);
         break;
     case UIDisplayMode::SHOW_TIPS:
         gfx_obj_set_visible(g_obj_label_toast, true);
@@ -211,7 +208,8 @@ static void InitializeGraphics(const esp_lcd_panel_handle_t panel, gfx_handle_t*
         .buffers = {
             .buf1 = nullptr,
             .buf2 = nullptr,
-            .buf_pixels = static_cast<size_t>(width * 16),
+            // .buf_pixels = static_cast<size_t>(width * 16),
+            .buf_pixels = static_cast<size_t>(width * 4),
         },
         .task = GFX_EMOTE_INIT_CONFIG()
     };
@@ -219,12 +217,13 @@ static void InitializeGraphics(const esp_lcd_panel_handle_t panel, gfx_handle_t*
     gfx_cfg.task.task_stack_caps = MALLOC_CAP_DEFAULT;
     gfx_cfg.task.task_affinity = 0;
     gfx_cfg.task.task_priority = 5;
-    gfx_cfg.task.task_stack = 8 * 1024;
+    // gfx_cfg.task.task_stack = 8 * 1024;
+    gfx_cfg.task.task_stack = 4 * 1024;
 
     *engine_handle = gfx_emote_init(&gfx_cfg);
 }
 
-static void SetupUI(const gfx_handle_t engine_handle, EmoteDisplay* const display)
+static void SetupUI(const gfx_handle_t engine_handle, EmoteDisplay* const display, const int width, const int height)
 {
     if (!display) {
         ESP_LOGE(TAG, "SetupUI: display is nullptr");
@@ -239,7 +238,7 @@ static void SetupUI(const gfx_handle_t engine_handle, EmoteDisplay* const displa
 
     g_obj_label_toast = gfx_label_create(engine_handle);
     gfx_obj_align(g_obj_label_toast, GFX_ALIGN_TOP_MID, 0, 20);
-    gfx_obj_set_size(g_obj_label_toast, 200, 40);
+    gfx_obj_set_size(g_obj_label_toast, 100, 25);
     gfx_label_set_text(g_obj_label_toast, Lang::Strings::INITIALIZING);
     gfx_label_set_color(g_obj_label_toast, GFX_COLOR_HEX(0xFFFFFF));
     gfx_label_set_text_align(g_obj_label_toast, GFX_TEXT_ALIGN_CENTER);
@@ -248,16 +247,11 @@ static void SetupUI(const gfx_handle_t engine_handle, EmoteDisplay* const displa
     gfx_label_set_scroll_loop(g_obj_label_toast, true);
     gfx_label_set_font(g_obj_label_toast, (gfx_font_t)&BUILTIN_TEXT_FONT);
 
-    g_obj_label_clock = gfx_label_create(engine_handle);
-    gfx_obj_align(g_obj_label_clock, GFX_ALIGN_TOP_MID, 0, 15);
-    gfx_obj_set_size(g_obj_label_clock, 200, 50);
-    gfx_label_set_text(g_obj_label_clock, "--:--");
-    gfx_label_set_color(g_obj_label_clock, GFX_COLOR_HEX(0xFFFFFF));
-    gfx_label_set_text_align(g_obj_label_clock, GFX_TEXT_ALIGN_CENTER);
-    gfx_label_set_font(g_obj_label_clock, (gfx_font_t)&BUILTIN_TEXT_FONT);
+    gfx_label_set_bg_color(g_obj_label_toast, GFX_COLOR_HEX(0x0000FF));
+    gfx_label_set_bg_enable(g_obj_label_toast, true);
 
     g_obj_anim_listen = gfx_anim_create(engine_handle);
-    gfx_obj_align(g_obj_anim_listen, GFX_ALIGN_TOP_MID, 0, 5);
+    gfx_obj_align(g_obj_anim_listen, GFX_ALIGN_CENTER, 0, 0);
     gfx_anim_start(g_obj_anim_listen);
     gfx_obj_set_visible(g_obj_anim_listen, false);
 
@@ -291,7 +285,7 @@ EmoteEngine::EmoteEngine(const esp_lcd_panel_handle_t panel, const esp_lcd_panel
 
     if (display) {
         DisplayLockGuard lock(display);
-        SetupUI(engine_handle_, display);
+        SetupUI(engine_handle_, display, width, height);
     }
 
     RegisterCallbacks(panel_io, engine_handle_);
@@ -487,7 +481,7 @@ void EmoteDisplay::UpdateStatusBar(bool update_all)
         snprintf(time_str, sizeof(time_str), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
 
         DisplayLockGuard lock(this);
-        gfx_label_set_text(g_obj_label_clock, time_str);
+        gfx_label_set_text(g_obj_label_toast, time_str);
         SetUIDisplayMode(UIDisplayMode::SHOW_TIME, this);
     }
 }
@@ -561,7 +555,6 @@ void EmoteDisplay::AddLayoutData(const std::string &name, const std::string &ali
     const UIElement elements[] = {
         {g_obj_anim_eye,     UI_ELEMENT_EYE_ANIM},
         {g_obj_label_toast,  UI_ELEMENT_TOAST_LABEL},
-        {g_obj_label_clock,  UI_ELEMENT_CLOCK_LABEL},
         {g_obj_anim_listen,  UI_ELEMENT_LISTEN_ANIM},
         {g_obj_img_status,   UI_ELEMENT_STATUS_ICON}
     };
@@ -593,9 +586,6 @@ void EmoteDisplay::AddTextFont(std::shared_ptr<LvglFont> text_font)
     DisplayLockGuard lock(this);
     if (g_obj_label_toast && text_font_) {
         gfx_label_set_font(g_obj_label_toast, const_cast<void*>(static_cast<const void*>(text_font_->font())));
-    }
-    if (g_obj_label_clock && text_font_) {
-        gfx_label_set_font(g_obj_label_clock, const_cast<void*>(static_cast<const void*>(text_font_->font())));
     }
 }
 

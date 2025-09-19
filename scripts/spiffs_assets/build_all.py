@@ -42,21 +42,31 @@ def build_assets(wakenet_model, text_font, emoji_collection, target_board, build
         cmd.extend(["--wakenet_model", wakenet_path])
     
     if text_font != "none":
-        text_font_path = os.path.join("../../components/78__xiaozhi-fonts/cbin", f"{text_font}.bin")
+        text_font_path = os.path.join("../../managed_components/78__xiaozhi-fonts/cbin", f"{text_font}.bin")
         cmd.extend(["--text_font", text_font_path])
     
     if emoji_collection != "none":
-        emoji_path = os.path.join("../../components/xiaozhi-fonts/build", emoji_collection)
+        emoji_path = os.path.join("../../managed_components/xiaozhi-fonts/png", emoji_collection)
         cmd.extend(["--emoji_collection", emoji_path])
 
     if target_board != "none":
-        res_path = os.path.join("../../managed_components/espressif2022__esp_emote_gfx/emoji_large", "")
+        print(f"target_board: {target_board[0]}")
+        print(f"target_board: {target_board[1]}")
+        res_path = os.path.join("../../managed_components/espressif2022__esp_emote_gfx/", target_board[1])
         cmd.extend(["--res_path", res_path])
 
-        target_board_path = os.path.join("../../main/boards/", f"{target_board}")
+        print(f"res_path: {res_path}")
+
+        target_board_path = os.path.join("../../main/boards/", f"{target_board[0]}")
         cmd.extend(["--target_board", target_board_path])
     
-    print(f"\n正在构建: {wakenet_model}-{text_font}-{emoji_collection}-{target_board}")
+    # Prepare display info
+    if target_board != "none":
+        display_info = f"{wakenet_model}-{text_font}-{emoji_collection}-{target_board[0]}-{target_board[1]}"
+    else:
+        display_info = f"{wakenet_model}-{text_font}-{emoji_collection}"
+    
+    print(f"\n正在构建: {display_info}")
     print(f"执行命令: {' '.join(cmd)}")
     
     try:
@@ -65,7 +75,7 @@ def build_assets(wakenet_model, text_font, emoji_collection, target_board, build
         
         # Generate output filename
         if(target_board != "none"):
-            output_name = f"{wakenet_model}-{text_font}-{target_board}.bin"
+            output_name = f"{wakenet_model}-{text_font}-{target_board[0]}.bin"
         else:
             output_name = f"{wakenet_model}-{text_font}-{emoji_collection}.bin"
         
@@ -101,28 +111,29 @@ def main():
     
     # Configuration
     wakenet_models = [
-        "none",
-        "wn9_nihaoxiaozhi_tts",
+        # "none",
+        # "wn9_nihaoxiaozhi_tts",
         "wn9s_nihaoxiaozhi"
     ]
     
     text_fonts = [
         "none",
         "font_puhui_common_14_1",
-        "font_puhui_common_16_4", 
-        "font_puhui_common_20_4",
-        "font_puhui_common_30_4",
+        # "font_puhui_common_16_4", 
+        # "font_puhui_common_20_4",
+        # "font_puhui_common_30_4",
     ]
     
     emoji_collections = [
         "none",
-        "emojis_32",
-        "emojis_64",
+        "twemoji_32",
+        "twemoji_64",
     ]
 
     emoji_target_boards = [
-        "esp-box-3",
-        "echoear",
+        # ["esp-box-3","emoji_large"],
+        # ["echoear","emoji_large"],
+        ["esp-hi","emoji_small"],
     ]
     
     # Get script directory

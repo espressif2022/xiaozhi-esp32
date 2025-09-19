@@ -354,6 +354,10 @@ void Application::Start() {
 
     // Print board name/version info
     display->SetChatMessage("system", SystemInfo::GetUserAgent().c_str());
+    
+    // Print initial memory status
+    ESP_LOGI(TAG, "🚀 Application starting...");
+    SystemInfo::PrintQuickMemoryInfo();
 
     /* Setup the audio service */
     auto codec = board.GetAudioCodec();
@@ -383,6 +387,8 @@ void Application::Start() {
 
     /* Wait for the network to be ready */
     board.StartNetwork();
+    ESP_LOGI(TAG, "🚀 Application network ready...");
+    SystemInfo::PrintQuickMemoryInfo();
 
     // Update the status bar immediately to show the network state
     display->UpdateStatusBar(true);
@@ -397,6 +403,9 @@ void Application::Start() {
     // Initialize the protocol
     display->SetStatus(Lang::Strings::LOADING_PROTOCOL);
 
+    ESP_LOGI(TAG, "🚀 Application initializing protocol...");
+    SystemInfo::PrintQuickMemoryInfo();
+
     // Add MCP common tools before initializing the protocol
     auto& mcp_server = McpServer::GetInstance();
     mcp_server.AddCommonTools();
@@ -410,6 +419,9 @@ void Application::Start() {
         ESP_LOGW(TAG, "No protocol specified in the OTA config, using MQTT");
         protocol_ = std::make_unique<MqttProtocol>();
     }
+
+    ESP_LOGI(TAG, "🚀 Application onConnected...");
+    SystemInfo::PrintQuickMemoryInfo();
 
     protocol_->OnConnected([this]() {
         DismissAlert();
@@ -605,8 +617,9 @@ void Application::MainEventLoop() {
             // Print the debug info every 10 seconds
             if (clock_ticks_ % 10 == 0) {
                 // SystemInfo::PrintTaskCpuUsage(pdMS_TO_TICKS(1000));
+                SystemInfo::PrintQuickMemoryInfo();
                 // SystemInfo::PrintTaskList();
-                SystemInfo::PrintHeapStats();
+                // SystemInfo::PrintHeapStats();
             }
         }
     }
