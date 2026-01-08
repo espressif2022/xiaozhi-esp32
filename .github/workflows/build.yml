@@ -40,14 +40,16 @@ jobs:
           EVENT_NAME="${{ github.event_name }}"
 
           # push 到 main 分支，编译全部变体
-          if [[ "$EVENT_NAME" == "push" ]]; then
-            echo "variants=$ALL_VARIANTS" >> $GITHUB_OUTPUT
-            exit 0
-          fi
+          # if [[ "$EVENT_NAME" == "push" ]]; then
+          #   echo "variants=$ALL_VARIANTS" >> $GITHUB_OUTPUT
+          #   exit 0
+          # fi
 
           # pull_request 场景
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          # BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          # HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          BASE_SHA="${{ github.event.push.base.sha }}"
+          HEAD_SHA="${{ github.event.push.head.sha }}"
           echo "Base: $BASE_SHA, Head: $HEAD_SHA"
 
           CHANGED=$(git diff --name-only $BASE_SHA $HEAD_SHA || true)
