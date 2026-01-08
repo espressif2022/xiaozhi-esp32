@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - ci/* # for ci test
-      - v5.4_compat
   pull_request:
     branches:
       - main
@@ -57,19 +56,29 @@ jobs:
           NEED_ALL=0
           declare -A AFFECTED
           while IFS= read -r file; do
+            # 检查是否是 main/ 下的公共代码（排除 boards/）
             if [[ "$file" == main/* && "$file" != main/boards/* ]]; then
               NEED_ALL=1
+              continue
             fi
 
+            # 检查是否是公共板子代码
             if [[ "$file" == main/boards/common/* ]]; then
               NEED_ALL=1
+              continue
             fi
 
+            # 检查是否是特定板子的代码
             if [[ "$file" == main/boards/* ]]; then
               board=$(echo "$file" | cut -d '/' -f3)
               AFFECTED[$board]=1
             fi
           done <<< "$CHANGED"
+
+
+          echo "NEED_ALL: $NEED_ALL"
+          echo "AFFECTED: ${!AFFECTED[@]}"
+          echo "ALL_VARIANTS: $ALL_VARIANTS"
 
           if [[ "$NEED_ALL" -eq 1 ]]; then
             echo "variants=$ALL_VARIANTS" >> $GITHUB_OUTPUT
