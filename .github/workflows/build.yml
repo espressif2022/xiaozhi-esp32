@@ -45,11 +45,15 @@ jobs:
           #   exit 0
           # fi
 
-          # pull_request 场景
-          # BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          # HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          BASE_SHA="${{ github.event.push.base.sha }}"
-          HEAD_SHA="${{ github.event.push.head.sha }}"
+          # 根据事件类型获取 SHA
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            # push 事件：before 是 push 之前的 SHA，after 是 push 之后的 SHA
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.event.after }}"
+          fi
           echo "Base: $BASE_SHA, Head: $HEAD_SHA"
 
           CHANGED=$(git diff --name-only $BASE_SHA $HEAD_SHA || true)
