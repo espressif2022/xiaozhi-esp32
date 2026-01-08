@@ -393,6 +393,7 @@ void Application::CheckAssetsVersion() {
 
 
 
+
 void Application::CheckNewVersion() {
     const int MAX_RETRY = 10;
     int retry_count = 0;
