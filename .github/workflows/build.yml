@@ -111,6 +111,14 @@ jobs:
     container:
       image: espressif/idf:release-v${{ matrix.idf_version }}
     steps:
+      - name: Debug - Print variants JSON
+        run: |
+          echo "Variants JSON from prepare job:"
+          echo '${{ needs.prepare.outputs.variants }}'
+          echo ""
+          echo "Parsed JSON:"
+          echo '${{ toJson(fromJson(needs.prepare.outputs.variants)) }}'
+
       - name: Checkout
         uses: actions/checkout@v4
 
